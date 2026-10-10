@@ -1,6 +1,6 @@
 local existing=rawget(_G,'StratagemReserve')
 if existing then return existing end
-local S={version='0.3.0',phase='initializing',ingame_tested=false,multiplayer_tested=false}
+local S={version='0.3.1',phase='initializing',ingame_tested=false,multiplayer_tested=false}
 rawset(_G,'StratagemReserve',S)
 local loader=rawget(_G,'CowboyBingusModLoader')
 if type(loader)~='table' or loader.api~=1 or type(loader.open_log)~='function' or type(loader.jit)~='table' then
@@ -104,7 +104,7 @@ for _,group in ipairs(groups)do
     specs[#specs+1]={group..'_max_charges',{type='slider',label=label..'：储存次数上限',min=1,max=10,step=1,default=config[group..'_max_charges'],
         description='只影响该组战备，每个战备独立计数。默认 3。降低上限裁掉多余次数；提高上限不会赠送次数。'}}
     specs[#specs+1]={group..'_cd_growth',{type='slider',label=label..'：储备补充冷却增长倍率（X）',min=1,max=3,step=0.1,default=config[group..'_cd_growth'],
-        description='下一次补充耗时＝原冷却×倍率^(当前次数−1)。默认 1.0 不增加。1.5 时，有 1/2/3 次对应 1/1.5/2.25 倍；不影响短冷却或用尽次数后的完整冷却。'}}
+        description='有 1 次储备时，补充耗时等于原冷却；每多储存 1 次，再乘一次设定倍率。默认 1.0 不增加。倍率 1.5 时，有 1/2/3 次对应原冷却的 1/1.5/2.25 倍。只影响储备补充，短冷却和用尽次数后的完整冷却保持原值。'}}
 end
 local function checked(ok,why)assert(ok==true,tostring(why or 'menu API failed'))end
 local function menu_step()
@@ -160,5 +160,5 @@ if type(jit)=='table' and type(jit.off)=='function'then
     for _,module in ipairs{native,model}do for _,fn in pairs(module)do if type(fn)=='function'then pcall(jit.off,fn,true)end end end
     pcall(jit.off,after,true)
 end
-S.phase='waiting';note('Stratagem Reserve 0.3.0 loaded; orbital/green/blue groups; awaiting mission')
+S.phase='waiting';note('Stratagem Reserve 0.3.1 loaded; orbital/green/blue groups; awaiting mission')
 return S

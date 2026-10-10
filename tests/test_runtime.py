@@ -507,7 +507,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(g.state[b"phase"], b"disabled"); self.assertEqual(g.mem.writes, [])
 
     def test_duplicate_load_does_not_add_hooks(self):
-        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.0")
+        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.1")
         g.tick(); self.assertEqual(g.lua.globals()[b"original_calls"], 2)
 
     def test_original_errors_propagate_and_next_frame_restores(self):
