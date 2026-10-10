@@ -240,7 +240,7 @@ class Game:
         self.mem.put(definition + 0x200, entry['internal_name'].encode() + bytes(64))
         self.mem.put(BASE + 0x37cb600 + type_id * 8, Q(definition))
         self.mem.put(BASE + 0x21d4aa0 + type_id * 8, Q(definition + 0x200))
-        self.mem.put(address, U(type_id) + U(0xffffffff) + bytes(40))
+        self.mem.put(address, U(type_id) + U(entry['uses']) + bytes(40))
         rows = max(slot + 1, struct.unpack('<I', self.mem.read(self.manager + 0x7c0, 4))[0])
         self.mem.put(self.manager + 0x7c0, U(rows))
         row = self.row + slot * 0x3760
@@ -361,8 +361,8 @@ class RuntimeTests(unittest.TestCase):
         g.apply("short_cooldown", 10); g.tick(1); self.assertEqual(g.field(0x18, "Q"), deadline)
 
     def test_capacity_decrease_clamps_and_increase_grants_nothing(self):
-        g = self.game(); g.tick(); g.tick(140); g.apply("max_charges", 2); g.tick()
-        self.assertEqual(g.field(4), 2); g.apply("max_charges", 8); g.tick(); self.assertEqual(g.field(4), 2)
+        g = self.game(); g.tick(); g.tick(140); g.apply("blue_max_charges", 2); g.tick()
+        self.assertEqual(g.field(4), 2); g.apply("blue_max_charges", 8); g.tick(); self.assertEqual(g.field(4), 2)
 
     def test_cap_one_uses_only_full_cd(self):
         g = self.game(cfg="max_charges=1\n"); g.tick(); g.tick(1000); self.assertEqual(g.field(4), 1)
@@ -485,29 +485,29 @@ class RuntimeTests(unittest.TestCase):
 
     def test_menu_late_registration_single_callbacks(self):
         g = self.game(); g.tick(); g.tick()
-        self.assertEqual(len(list(g.lua.globals()[b"menu_state"][b"callbacks"].keys())), 5)
-        g.lua.execute(b"menu_state.pending.stratagem_reserve_max_charges=7")
+        self.assertEqual(len(list(g.lua.globals()[b"menu_state"][b"callbacks"].keys())), 12)
+        g.lua.execute(b"menu_state.pending.stratagem_reserve_blue_max_charges=7")
         for _ in range(121): g.tick()
-        self.assertEqual(g.lua.globals()[b"menu_state"][b"pending"][b"stratagem_reserve_max_charges"], 7)
+        self.assertEqual(g.lua.globals()[b"menu_state"][b"pending"][b"stratagem_reserve_blue_max_charges"], 7)
 
     def test_invalid_menu_values_leave_config_unchanged(self):
         g = self.game(); g.tick()
-        for key, value in [("max_charges", 0), ("max_charges", 2.5), ("short_cooldown", 0), ("short_cooldown", 5.25), ("enabled", 1), ('green_enabled', 1), ('blue_enabled', 0)]:
+        for key, value in [("blue_max_charges", 0), ("blue_max_charges", 2.5), ("short_cooldown", 0), ("short_cooldown", 5.25), ("enabled", 1), ('green_enabled', 1), ('blue_enabled', 0), ('red_cd_growth', 0.5), ('green_cd_growth', 1.25), ('blue_cd_growth', float('nan')), ('inherit_ratio', 1), ('red_max_charges', 11)]:
             self.assertFalse(g.apply(key, value)[0])
-        self.assertEqual(g.state[b"config"][b"max_charges"], 3)
+        self.assertEqual(g.state[b"config"][b"blue_max_charges"], 3)
 
     def test_config_persistence(self):
-        g = self.game(); g.tick(); g.apply("max_charges", 6); g.apply("short_cooldown", 4.5)
-        text = g.cfg.read_text(encoding="utf8"); self.assertIn("max_charges=6", text)
+        g = self.game(); g.tick(); g.apply("blue_max_charges", 6); g.apply("short_cooldown", 4.5)
+        text = g.cfg.read_text(encoding="utf8"); self.assertIn("blue_max_charges=6", text)
         self.assertIn("short_cooldown=4.5", text)
-        h = self.game(cfg=text); h.tick(); self.assertEqual(h.state[b"config"][b"max_charges"], 6)
+        h = self.game(cfg=text); h.tick(); self.assertEqual(h.state[b"config"][b"blue_max_charges"], 6)
 
     def test_invalid_config_disables_feature(self):
         g = self.game(cfg="short_cooldown=nan\n"); g.tick()
         self.assertEqual(g.state[b"phase"], b"disabled"); self.assertEqual(g.mem.writes, [])
 
     def test_duplicate_load_does_not_add_hooks(self):
-        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.2.0")
+        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.0")
         g.tick(); self.assertEqual(g.lua.globals()[b"original_calls"], 2)
 
     def test_original_errors_propagate_and_next_frame_restores(self):
@@ -540,7 +540,7 @@ class RuntimeTests(unittest.TestCase):
                 g.tick(cycle + 3)
                 self.assertEqual(state[b'count'], 1)
                 self.assertTrue(g.apply('enabled', False)[0])
-                self.assertEqual(g.mem.read(address + 4, 4), U(0xffffffff))
+                self.assertEqual(g.mem.read(address + 4, 4), U(entry['uses'] - 2 if entry['uses'] != 0xffffffff else 0xffffffff))
 
     def test_green_and_blue_have_independent_cycles_and_debits(self):
         g = self.game(); g.add_target(121); g.tick(); g.tick(140)
@@ -609,7 +609,7 @@ class RuntimeTests(unittest.TestCase):
         for slot in (0, 1): self.assertEqual(g.field(4, slot=slot), 0xffffffff)
 
     def test_nonexpendable_support_mission_and_reward_slots_are_untouched(self):
-        for type_id in (92, 31, 33, 69, 15, 124, 107):
+        for type_id in (92, 31, 33, 69, 15, 124, 3, 49, 5):
             with self.subTest(type_id=type_id):
                 g = self.game(); address = g.add_target(121)
                 g.mem.put(address, U(type_id)); original = g.mem.read(address, 48)
@@ -617,9 +617,9 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(g.mem.read(address, 48), original)
                 self.assertEqual(g.state[b'phase'], b'active')
 
-    def test_four_slots_share_cap_and_short_setting_without_sharing_counts(self):
+    def test_four_slots_share_short_setting_without_sharing_counts(self):
         g = self.game(); g.add_target(121, 1); g.add_target(6, 2); g.add_target(22, 3)
-        g.tick(); g.apply('max_charges', 4); g.apply('short_cooldown', 2.5); g.tick(210)
+        g.tick(); g.apply('blue_max_charges', 4); g.apply('green_max_charges', 4); g.apply('short_cooldown', 2.5); g.tick(210)
         self.assertEqual([g.field(4, slot=i) for i in range(4)], [4, 3, 2, 3])
         g.call(slot=2)
         self.assertEqual([g.field(4, slot=i) for i in range(4)], [4, 3, 1, 3])
@@ -628,20 +628,23 @@ class RuntimeTests(unittest.TestCase):
     def test_group_preferences_and_existing_configuration_are_persisted(self):
         g = self.game(cfg='enabled=1\nmax_charges=6\nshort_cooldown=4.5\n'); g.tick()
         self.assertTrue(g.state[b'config'][b'green_enabled']); self.assertTrue(g.state[b'config'][b'blue_enabled'])
-        self.assertEqual(g.state[b'config'][b'max_charges'], 6)
+        self.assertEqual(g.state[b'config'][b'blue_max_charges'], 6)
+        self.assertEqual(g.state[b'config'][b'green_max_charges'], 6)
+        self.assertEqual(g.state[b'config'][b'red_max_charges'], 3)
         self.assertEqual(g.state[b'config'][b'short_cooldown'], 4.5)
         g.apply('blue_enabled', False); g.apply('green_enabled', False)
         text = g.cfg.read_text(encoding='utf8')
         h = self.game(cfg=text); h.tick(); self.assertEqual(h.mem.writes, [])
         self.assertFalse(h.state[b'config'][b'green_enabled']); self.assertFalse(h.state[b'config'][b'blue_enabled'])
-        self.assertEqual(h.state[b'config'][b'max_charges'], 6)
+        self.assertEqual(h.state[b'config'][b'blue_max_charges'], 6)
         self.assertEqual(h.state[b'config'][b'short_cooldown'], 4.5)
 
     def test_menu_has_global_group_toggles_and_adjustable_shared_short_cooldown(self):
         g = self.game(); g.tick()
         options = g.lua.globals()[b'menu_state'][b'options']
-        self.assertEqual(set(options.keys()), {b'stratagem_reserve_' + k for k in
-                         (b'enabled', b'green_enabled', b'blue_enabled', b'short_cooldown', b'max_charges')})
+        keys = [b'enabled', b'inherit_ratio', b'short_cooldown']
+        keys += [group + suffix for group in (b'red', b'green', b'blue') for suffix in (b'_enabled', b'_max_charges', b'_cd_growth')]
+        self.assertEqual(set(options.keys()), {b'stratagem_reserve_' + k for k in keys})
         slider = options[b'stratagem_reserve_short_cooldown']
         self.assertEqual((slider[b'min'], slider[b'max'], slider[b'step']), (1, 60, 0.5))
         self.assertNotIn(b'EAT-17', options[b'stratagem_reserve_enabled'][b'label'])
@@ -650,6 +653,160 @@ class RuntimeTests(unittest.TestCase):
         g = self.game(); g.tick(); g.tick(20)
         self.assertIn((g.row + 0x2028, "储备补充 00:50".encode()), g.texts)
         self.assertEqual(struct.unpack("<I", g.mem.read(g.row + 0x3758, 4))[0], 1)
+
+    def test_three_groups_have_independent_caps(self):
+        g = self.game(); g.add_target(121, 1); g.add_target(4, 2); g.tick()
+        g.apply('blue_max_charges', 2); g.apply('green_max_charges', 4); g.apply('red_max_charges', 5)
+        g.tick(1000)
+        self.assertEqual([g.field(4, slot=i) for i in range(3)], [2, 4, 5])
+        g.apply('green_max_charges', 1); g.tick()
+        self.assertEqual([g.field(4, slot=i) for i in range(3)], [2, 1, 5])
+
+    def test_exponential_refill_stages_and_long_frame_surplus(self):
+        g = self.game(cfg='blue_max_charges=5\nblue_cd_growth=2\n'); g.tick()
+        g.tick(70); self.assertEqual((g.display()[b'count'], g.display()[b'cycle']), (2, 140))
+        g.tick(140 + 30)
+        self.assertEqual((g.display()[b'count'], g.display()[b'cycle'], g.display()[b'progress']), (3, 280, 30))
+        g.tick(250 + 560)
+        self.assertEqual(g.display()[b'count'], 5); self.assertEqual(g.display()[b'progress'], 0)
+
+    def test_three_groups_have_independent_growth_and_default_first_stage(self):
+        g = self.game(); g.add_target(121, 1); g.add_target(4, 2); g.tick()
+        for group, value in [('red', 1.5), ('green', 2), ('blue', 1)]:
+            self.assertTrue(g.apply(group + '_cd_growth', value)[0])
+        g.tick(90)
+        slots = g.state[b'model'][b'slots']
+        self.assertEqual(g.display()[b'cycle'], 70)
+        self.assertEqual(slots[b'TurretMachinegunGPMG'][b'cycle'], 180)
+        self.assertEqual(slots[b'OrbitalGatlingBarrage'][b'cycle'], 105)
+        self.assertEqual([g.field(4, slot=i) for i in range(3)], [2, 2, 2])
+
+    def test_call_inherits_seconds_and_completes_only_after_short_cooldown(self):
+        g = self.game(cfg='blue_max_charges=4\nblue_cd_growth=2\n'); g.tick(); g.tick(140)
+        self.assertEqual((g.display()[b'progress'], g.display()[b'cycle']), (70, 140))
+        g.call(dt=0)
+        self.assertEqual((g.display()[b'count'], g.display()[b'progress'], g.display()[b'cycle']), (1, 70, 70))
+        self.assertEqual(g.field(0x18, 'Q') - g.field(0x20, 'Q'), 5_000_000)
+        g.tick(7.5); self.assertEqual(g.display()[b'count'], 1)
+        g.tick(0.5); self.assertEqual((g.display()[b'count'], g.display()[b'progress']), (2, 0))
+
+    def test_call_inherits_ratio_and_pauses_the_converted_progress(self):
+        g = self.game(cfg='blue_max_charges=4\nblue_cd_growth=2\ninherit_ratio=1\n'); g.tick(); g.tick(140)
+        g.call(dt=0)
+        self.assertEqual((g.display()[b'count'], g.display()[b'progress'], g.display()[b'cycle']), (1, 35, 70))
+        g.tick(8); self.assertEqual(g.display()[b'progress'], 35)
+        g.tick(35); self.assertEqual((g.display()[b'count'], g.display()[b'progress']), (2, 0))
+
+    def test_shared_inheritance_switch_controls_every_group(self):
+        for group, type_id in [('blue', 147), ('green', 121), ('red', 4)]:
+            for ratio, fraction in [(False, 1), (True, 0.5)]:
+                with self.subTest(group=group, ratio=ratio):
+                    g = self.game()
+                    slot = 0 if type_id == 147 else 1
+                    if slot: g.add_target(type_id)
+                    g.tick(); g.apply(group + '_cd_growth', 2); g.apply('inherit_ratio', ratio)
+                    cycle = REFERENCE_TARGETS[type_id]['timings'][-1]
+                    g.tick(cycle * 1.5)
+                    key = REFERENCE_TARGETS[type_id]['key'].encode()
+                    state = g.state[b'model'][b'slots'][key]
+                    before = state[b'progress']; g.call(dt=0, slot=slot)
+                    self.assertAlmostEqual(state[b'progress'], before * fraction)
+                    self.assertEqual(state[b'cycle'], cycle)
+
+    def test_growth_change_inherits_ratio_or_seconds_without_retroactive_shortening(self):
+        for ratio, expected in [(False, 100), (True, 50)]:
+            with self.subTest(ratio=ratio):
+                g = self.game(cfg='blue_max_charges=4\nblue_cd_growth=2\n'); g.tick(); g.tick(170)
+                g.apply('inherit_ratio', ratio); g.apply('blue_cd_growth', 1); g.tick()
+                if ratio:
+                    self.assertEqual((g.display()[b'count'], g.display()[b'progress']), (2, expected))
+                else:
+                    self.assertEqual((g.display()[b'count'], g.display()[b'progress']), (3, expected - 70))
+
+    def test_native_upgrade_cycle_changes_use_selected_inheritance(self):
+        for ratio, expected in [(False, 20), (True, 10)]:
+            with self.subTest(ratio=ratio):
+                g = self.game(); g.tick(); g.tick(20); g.apply('inherit_ratio', ratio)
+                g.cooldown = 35; g.tick()
+                self.assertEqual(g.display()[b'cycle'], 35); self.assertEqual(g.display()[b'progress'], expected)
+
+    def test_multiplier_does_not_extend_full_cooldown_and_pause_keeps_progress(self):
+        g = self.game(cfg='blue_cd_growth=3\n'); g.tick(); g.tick(70); g.tick(25)
+        g.mem.put(g.hud + 0x24e340 + 0x59, b'\1'); g.tick(500)
+        self.assertEqual(g.display()[b'progress'], 25)
+        g.mem.put(g.hud + 0x24e340 + 0x59, b'\0'); g.call(dt=0)
+        self.assertEqual(g.display()[b'progress'], 25)
+        g.tick(8); g.call(dt=0)
+        self.assertEqual(g.display()[b'count'], 0)
+        self.assertEqual(g.field(0x18, 'Q') - g.field(0x20, 'Q'), 70_000_000)
+
+    def test_orbital_group_disable_leaves_blue_and_green_running(self):
+        g = self.game(); g.add_target(121, 1); g.add_target(4, 2); g.tick(); g.tick(140); g.call(slot=2)
+        g.apply('red_enabled', False)
+        self.assertEqual(g.field(4, slot=2), 0xffffffff)
+        self.assertEqual(g.field(0x18, 'Q', 2) - g.field(0x20, 'Q', 2), 70_000_000)
+        g.tick(); self.assertEqual([g.field(4, slot=i) for i in (0, 1)], [3, 2])
+
+    def test_laser_retains_three_total_dispatches_and_cannot_recharge_after_exhaustion(self):
+        g = self.game(cfg='red_max_charges=10\n'); g.add_target(107); g.tick(); g.tick(600)
+        laser = g.state[b'model'][b'slots'][b'OrbitalLaser']
+        self.assertEqual((laser[b'count'], laser[b'budget']), (3, 3))
+        calls = g.calls
+        for _ in range(3): g.call(slot=1); g.tick(8)
+        self.assertEqual((laser[b'count'], laser[b'budget'], g.field(4, slot=1)), (0, 0, 0))
+        g.tick(100000); g.call(slot=1)
+        self.assertEqual(g.calls - calls, 3); self.assertFalse(laser[b'display'][b'charging'])
+        g.apply('red_enabled', False); g.apply('red_enabled', True); g.tick(1000); g.call(slot=1)
+        self.assertEqual(g.field(4, slot=1), 0); self.assertEqual(g.calls - calls, 3)
+
+    def test_laser_attached_after_prior_calls_respects_remaining_allowance(self):
+        g = self.game(); address = g.add_target(107); g.mem.put(address + 4, U(1)); g.tick(); g.tick(2000)
+        laser = g.state[b'model'][b'slots'][b'OrbitalLaser']
+        self.assertEqual((laser[b'count'], laser[b'budget']), (1, 1))
+        g.call(slot=1); g.tick(2000)
+        self.assertEqual(g.field(4, slot=1), 0); self.assertEqual(laser[b'count'], 0)
+
+    def test_laser_disable_after_one_call_restores_two_not_three(self):
+        g = self.game(); g.add_target(107); g.tick(); g.tick(300); g.call(slot=1)
+        g.apply('red_enabled', False)
+        self.assertEqual(g.field(4, slot=1), 2)
+        g.apply('red_enabled', True); g.tick(); g.tick(1000)
+        laser = g.state[b'model'][b'slots'][b'OrbitalLaser']
+        self.assertEqual((laser[b'count'], laser[b'budget']), (2, 2))
+
+    def test_laser_shutdown_or_snapshot_failure_preserves_unprocessed_native_dispatch(self):
+        for failure in (False, True):
+            with self.subTest(snapshot_failure=failure):
+                g = self.game(); address = g.add_target(107); g.tick()
+                g.pending_call = True; g.pending_slot = 1; g.frame(0.1)
+                if failure:
+                    g.mem.put(0x70000000 + 107 * 0x1000 + 0x300, bytes(8)); g.tick()
+                    self.assertEqual(g.state[b'phase'], b'stopped')
+                else: g.apply('red_enabled', False)
+                self.assertEqual(g.mem.read(address + 4, 4), U(2))
+
+    def test_laser_short_deadline_write_failure_does_not_refund_dispatch(self):
+        g = self.game(cfg='blue_enabled=0\n'); g.add_target(107); g.tick(); g.tick(300)
+        g.mem.fail_next = True; g.mem.partial = True; g.call(slot=1)
+        self.assertEqual(g.state[b'phase'], b'stopped'); self.assertEqual(g.field(4, slot=1), 2)
+        self.assertEqual(g.field(0x18, 'Q', 1) - g.field(0x20, 'Q', 1), 300_000_000)
+
+    def test_config_roundtrip_and_legacy_caps_prefer_explicit_group_values(self):
+        g = self.game(cfg='blue_max_charges=2\nmax_charges=6\ngreen_max_charges=4\n')
+        g.tick(); config = g.state[b'config']
+        self.assertEqual([config[(c + '_max_charges').encode()] for c in ('red','green','blue')], [3,4,2])
+        g.apply('red_cd_growth', 1.7); g.apply('green_cd_growth', 1.3); g.apply('blue_cd_growth', 2.1)
+        g.apply('inherit_ratio', True)
+        text = g.cfg.read_text(encoding='utf8'); self.assertNotIn('\nmax_charges=', text)
+        h = self.game(cfg=text); h.tick(); config = h.state[b'config']
+        self.assertEqual([config[(c + '_cd_growth').encode()] for c in ('red','green','blue')], [1.7,1.3,2.1])
+        self.assertTrue(config[b'inherit_ratio'])
+
+    def test_malformed_new_config_disables_feature(self):
+        for cfg in ('red_cd_growth=nan\n', 'green_max_charges=0\n', 'blue_cd_growth=1.25\n', 'inherit_ratio=2\n'):
+            with self.subTest(cfg=cfg):
+                g = self.game(cfg=cfg); g.tick(); self.assertEqual(g.state[b'phase'], b'disabled')
+                self.assertEqual(g.mem.writes, [])
 
     def test_hud_at_cap_restores_original_status_text(self):
         g = self.game(); g.tick(); g.tick(140)
@@ -700,6 +857,11 @@ if __name__ == "__main__":
               "ingame_tested": False, "multiplayer_tested": False,
               "native_memory": "simulated", "native_dispatch": "simulated", "hud_rendering": "not tested",
               "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
-              "defaults": {"enabled": True, "green_enabled": True, "blue_enabled": True, "max_charges": 3, "short_cooldown": 5},
-              "target_counts": {"green": 18, "blue": 7}}
+              "defaults": {"enabled": True, "red_enabled": True, "green_enabled": True, "blue_enabled": True,
+                           "red_max_charges": 3, "green_max_charges": 3, "blue_max_charges": 3,
+                           "red_cd_growth": 1, "green_cd_growth": 1, "blue_cd_growth": 1,
+                           "inherit_ratio": False, "short_cooldown": 5},
+              "reserve_cycle_formula": "native_effective_cd * group_cd_growth ** max(0, stored_count - 1)",
+              "orbital_laser_mission_limit": 3,
+              "target_counts": {"red": 13, "green": 18, "blue": 7}}
     (ROOT / "validation/offline.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf8")

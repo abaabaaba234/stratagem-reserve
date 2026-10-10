@@ -1,7 +1,7 @@
 {
   "status": "OFFLINE_PASSED",
-  "test_cases": 61,
-  "source_sha256": "90fe84c4021ec89d87b021e865a41492864c1f82110e3f59b1995ca8469c768b",
+  "test_cases": 78,
+  "source_sha256": "318aa3c50c7f0cd18d1bf99023c79d823190537e93eb41c1d10c4192a308ea4c",
   "engine": "LuaJIT 2.1 via lupa 2.8",
   "supported_steam_build": 25480438,
   "ingame_tested": false,
@@ -12,12 +12,22 @@
   "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
   "defaults": {
     "enabled": true,
+    "red_enabled": true,
     "green_enabled": true,
     "blue_enabled": true,
-    "max_charges": 3,
+    "red_max_charges": 3,
+    "green_max_charges": 3,
+    "blue_max_charges": 3,
+    "red_cd_growth": 1,
+    "green_cd_growth": 1,
+    "blue_cd_growth": 1,
+    "inherit_ratio": false,
     "short_cooldown": 5
   },
+  "reserve_cycle_formula": "native_effective_cd * group_cd_growth ** max(0, stored_count - 1)",
+  "orbital_laser_mission_limit": 3,
   "target_counts": {
+    "red": 13,
     "green": 18,
     "blue": 7
   }

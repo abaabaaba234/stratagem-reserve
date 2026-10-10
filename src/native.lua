@@ -48,7 +48,7 @@ function M.new(targets,note)
     local process=kernel.GetCurrentProcess()
     local by_type={}
     for _,t in ipairs(targets)do
-        assert(not by_type[t.type_id] and (t.group=='green' or t.group=='blue'),'invalid target registry')
+        assert(not by_type[t.type_id] and (t.group=='green' or t.group=='blue' or t.group=='red'),'invalid target registry')
         by_type[t.type_id]=t
     end
     local buffer=ffi.new('uint8_t[512]');local got=ffi.new('size_t[1]')
@@ -101,7 +101,7 @@ function M.new(targets,note)
         local nameptr=ptr(base+0x21d4aa0+t.type_id*8)
         local name=nameptr and read(nameptr,64)
         assert(u32(raw,0)==t.type_id and name and name:match('^([^%z]+)')==t.internal_name
-            and u32(raw,0x3c)==t.category and u32(raw,0x50)==0xffffffff
+            and u32(raw,0x3c)==t.category and u32(raw,0x50)==(t.native_uses or 0xffffffff)
             and u32(raw,0x94)==0 and u32(raw,0xa0)==#t.payloads,'target definition differs')
         local p=u64(raw,0x98);local payload=read(p,#t.payloads*8)
         local expected='';for _,h in ipairs(t.payloads)do expected=expected..unhex(h)end
@@ -121,13 +121,14 @@ function M.new(targets,note)
             and uint(id.address)==id.type_id
             and ptr(base+0x37cb600+id.type_id*8)==id.definition
     end
-    local fields={uses={4,'uint32_t',4},deadline={0x18,'uint64_t',8}}
+    local fields={uses={4,'uint32_t',4},deadline={0x18,'uint64_t',8},start={0x10,'uint64_t',8}}
     function api.read_field(id,field)
         if not api.valid(id) then return nil end
         local f=assert(fields[field]);local b=read(id.address+f[1],f[3])
         return b and (f[3]==4 and u32(b,0) or u64(b,0))
     end
     function api.cas(id,field,expected,value)
+        assert(field=='uses' or field=='deadline','read-only native field')
         if not api.valid(id) then return false end
         local f=assert(fields[field]);local address=id.address+f[1]
         if read(address,f[3])~=packed(expected,f[2]) then return false end
@@ -176,7 +177,7 @@ function M.new(targets,note)
                     assert(not found[t.type_id],'duplicate target slots');found[t.type_id]=true
                     local b=assert(read(address,48),'target slot unavailable')
                     local cycle=tonumber(effective_cd(upgrades,ffi.cast('uint64_t *',owner)[0],t.type_id,0,0))
-                    result.targets[#result.targets+1]={key=t.key,group=t.group,type_id=t.type_id,manager=manager,
+                    result.targets[#result.targets+1]={key=t.key,group=t.group,type_id=t.type_id,native_uses=t.native_uses or 0xffffffff,manager=manager,
                         entry=entry,owner=owner,slot=slot,address=address,definition=def,
                         clock=clock,now=now,uses=u32(b,4),start=u64(b,0x10),
                         deadline=u64(b,0x18),arrival=u64(b,0x20),base_cd=cycle,hud=hud}

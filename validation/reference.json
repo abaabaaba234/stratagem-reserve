@@ -5,8 +5,8 @@
   "code_capture_sha256": "373fd67e02bbf277494bfa8357acbcbc5a7e2a309b5f0b20578c7b383996658b",
   "code_capture_origin": "eagle-carpet-bomb/research/current/code.bin; historical read-only capture, not new gameplay proof",
   "stratagem_reference_sha256": "79f08fb1685870db3fb13bb6a0c88871d82ebc0336844119588bcbde6f698aae",
-  "native_source_sha256": "d0d2038d3f9c55de4ec7592650c1f070771a4feb8876b15a3bc0ab99a282ba7a",
-  "target_source_sha256": "38261581ec9445bda6846e58b13de80b053d4e7c8e7385f4d36811c7fc437747",
+  "native_source_sha256": "0de7c89874ccb977712c222aee7089c596211ec5697b5c88545941fe16a98dc3",
+  "target_source_sha256": "dc7ba75bae8979717139d14b00373fa6d1a0d2ba32faea51430b11900a29df0d",
   "anchors": [
     {
       "rva": "0x1366dc0",
@@ -70,6 +70,30 @@
     }
   ],
   "targets": [
+    {
+      "type": 4,
+      "internal_name": "OrbitalGatlingBarrage",
+      "title": "ORBITAL. GATLING BARRAGE",
+      "category": 5,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        70.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "7d72a031b0b3c618",
+      "payload": [
+        "2f257b91037ac421"
+      ],
+      "group": "red",
+      "key": "OrbitalGatlingBarrage",
+      "label": "\u8f68\u9053\u52a0\u7279\u6797\u706b\u529b\u7f51"
+    },
     {
       "type": 6,
       "internal_name": "LaserGuidedMissileLauncher",
@@ -196,6 +220,30 @@
       "label": "\u8361\u5e73\u8005"
     },
     {
+      "type": 21,
+      "internal_name": "OrbitalWalkingBarrage",
+      "title": "ORBITAL. WALKING BARRAGE",
+      "category": 5,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        240.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "c0c7278d9f015ee7",
+      "payload": [
+        "cb7f154719f331ec"
+      ],
+      "group": "red",
+      "key": "OrbitalWalkingBarrage",
+      "label": "\u8f68\u9053\u6e38\u8d70\u706b\u529b\u7f51"
+    },
+    {
       "type": 22,
       "internal_name": "EnergyShield",
       "title": "EMPLACEMENTS. SHIELD GENERATOR RELAY",
@@ -246,6 +294,30 @@
       "label": "\u6fc0\u5149\u70ae\u54e8\u6212\u70ae"
     },
     {
+      "type": 34,
+      "internal_name": "OrbitalStun",
+      "title": "ORBITAL. STATIC FIELD CONDUTORS",
+      "category": 1,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        75.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "1e6c958b95568dd7",
+      "payload": [
+        "55f3747b8c27aef6"
+      ],
+      "group": "red",
+      "key": "OrbitalStun",
+      "label": "\u8f68\u9053\u9759\u7535\u573a"
+    },
+    {
       "type": 39,
       "internal_name": "ExpendableNapalmLauncher",
       "title": "TEAM WEAPONS. EXPENDABLE NAPALM LAUNCHER",
@@ -269,6 +341,30 @@
       "group": "blue",
       "key": "napalm_launcher",
       "label": "\u6d88\u8017\u6027\u51dd\u56fa\u6c7d\u6cb9\u5f39"
+    },
+    {
+      "type": 41,
+      "internal_name": "OrbitalGas",
+      "title": "ORBITAL. GAS STRIKE",
+      "category": 1,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        75.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "6369816737a36a40",
+      "payload": [
+        "05f3c83a91075766"
+      ],
+      "group": "red",
+      "key": "OrbitalGas",
+      "label": "\u8f68\u9053\u6bd2\u6c14\u6253\u51fb"
     },
     {
       "type": 44,
@@ -371,6 +467,30 @@
       "label": "\u706b\u7bad\u54e8\u6212\u70ae"
     },
     {
+      "type": 58,
+      "internal_name": "OrbitalRailcannon",
+      "title": "ORBITAL. RAILCANNON",
+      "category": 1,
+      "uses": 4294967295,
+      "timings": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "f4dc2361985c3026",
+      "payload": [
+        "ac129aa2db5eabc9"
+      ],
+      "group": "red",
+      "key": "OrbitalRailcannon",
+      "label": "\u8f68\u9053\u78c1\u8f68\u70ae"
+    },
+    {
       "type": 59,
       "internal_name": "Cover_Grenade_Launcher",
       "title": "EMPLACEMENTS. DEFENSE WALL GRENADE LAUNCHER",
@@ -396,6 +516,30 @@
       "label": "\u69b4\u5f39\u53d1\u5c04\u5668\u9632\u5fa1\u5899"
     },
     {
+      "type": 62,
+      "internal_name": "OrbitalWalkingBarrageSmoke",
+      "title": "ORBITAL. WALKING BARRAGE SMOKE",
+      "category": 5,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "e1ab26349774dec6",
+      "payload": [
+        "08d58cb1bf65f7a9"
+      ],
+      "group": "red",
+      "key": "OrbitalWalkingBarrageSmoke",
+      "label": "\u8f68\u9053\u6e38\u8d70\u70df\u96fe\u706b\u529b\u7f51"
+    },
+    {
       "type": 66,
       "internal_name": "TurretMachinegun",
       "title": "SENTRYS. GATLING",
@@ -419,6 +563,54 @@
       "group": "green",
       "key": "TurretMachinegun",
       "label": "\u52a0\u7279\u6797\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 74,
+      "internal_name": "OrbitalSmoke",
+      "title": "ORBITAL. SMOKE STRIKE",
+      "category": 1,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        75.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "bf35e874ac3a3b5a",
+      "payload": [
+        "da76a06325e692c9"
+      ],
+      "group": "red",
+      "key": "OrbitalSmoke",
+      "label": "\u8f68\u9053\u70df\u96fe\u6253\u51fb"
+    },
+    {
+      "type": 83,
+      "internal_name": "OrbitalShot",
+      "title": "ORBITAL. AIRBURST STRIKE",
+      "category": 1,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        100.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "f51342b25542a582",
+      "payload": [
+        "75b131dc1ddc02d5"
+      ],
+      "group": "red",
+      "key": "OrbitalShot",
+      "label": "\u8f68\u9053\u7a7a\u7206\u6253\u51fb"
     },
     {
       "type": 89,
@@ -496,6 +688,54 @@
       "label": "\u7279\u65af\u62c9\u5854"
     },
     {
+      "type": 106,
+      "internal_name": "OrbitalNapalmBarrage",
+      "title": "ORBITAL. NAPALM BARRAGE",
+      "category": 5,
+      "uses": 4294967295,
+      "timings": [
+        5.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        240.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "96cedf4706334c5f",
+      "payload": [
+        "a16ab4ff66ae6970"
+      ],
+      "group": "red",
+      "key": "OrbitalNapalmBarrage",
+      "label": "\u8f68\u9053\u51dd\u56fa\u6c7d\u6cb9\u5f39\u706b\u529b\u7f51"
+    },
+    {
+      "type": 107,
+      "internal_name": "OrbitalLaser",
+      "title": "ORBITAL. LASER",
+      "category": 1,
+      "uses": 3,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        300.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "662a9d42f834777e",
+      "payload": [
+        "ec3575e7a93793bb"
+      ],
+      "group": "red",
+      "key": "OrbitalLaser",
+      "label": "\u8f68\u9053\u6fc0\u5149"
+    },
+    {
       "type": 117,
       "internal_name": "TurretMortar",
       "title": "SENTRYS. MORTAR",
@@ -519,6 +759,30 @@
       "group": "green",
       "key": "TurretMortar",
       "label": "\u8feb\u51fb\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 118,
+      "internal_name": "OrbitalShell",
+      "title": "ORBITAL. PRECISION STRIKE",
+      "category": 1,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        80.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "dbae525060f06d70",
+      "payload": [
+        "c897c0d84448ab2c"
+      ],
+      "group": "red",
+      "key": "OrbitalShell",
+      "label": "\u8f68\u9053\u7cbe\u51c6\u6253\u51fb"
     },
     {
       "type": 119,
@@ -594,6 +858,54 @@
       "group": "green",
       "key": "TurretMachinegunGPMG",
       "label": "\u673a\u67aa\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 125,
+      "internal_name": "OrbitalBarrage",
+      "title": "ORBITAL. 380MM HE BARRAGE",
+      "category": 5,
+      "uses": 4294967295,
+      "timings": [
+        6.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        240.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "fe3ef44300e4a1e2",
+      "payload": [
+        "ef66b417edc3b1d6"
+      ],
+      "group": "red",
+      "key": "OrbitalBarrage",
+      "label": "\u8f68\u9053380\u6beb\u7c73\u706b\u529b\u7f51"
+    },
+    {
+      "type": 136,
+      "internal_name": "OrbitalStrike",
+      "title": "ORBITAL. 120MM HE STRIKE",
+      "category": 5,
+      "uses": 4294967295,
+      "timings": [
+        5.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "25b8cff26c7c0112",
+      "payload": [
+        "2d3bd00b1ed411b1"
+      ],
+      "group": "red",
+      "key": "OrbitalStrike",
+      "label": "\u8f68\u9053120\u6beb\u7c73\u706b\u529b\u7f51"
     },
     {
       "type": 137,
@@ -697,6 +1009,7 @@
     }
   ],
   "group_counts": {
+    "red": 13,
     "green": 18,
     "blue": 7
   },

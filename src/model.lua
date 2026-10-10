@@ -26,6 +26,12 @@ function M.new(adapter,config,note)
             if e then
                 local current=adapter.read_field(s.id,field)
                 if field=='uses' then
+                    -- A finite mission allowance must also reflect a dispatch that
+                    -- happened before shutdown or a failure prevented this tick.
+                    local start=s.budget and adapter.read_field(s.id,'start')
+                    if s.budget and current==e.last-1 and start and start>s.last_start then
+                        s.budget=math.max(0,s.budget-1);e.old=s.budget;e.last=current;s.last_start=start
+                    end
                     -- Native successful dispatch is allowed to decrement our last count.
                     if current==e.last or current==e.last-1 or current==e.old
                         or (e.failed and adapter.owned_prefix and adapter.owned_prefix(current,e.old,e.last)) then
@@ -57,32 +63,48 @@ function M.new(adapter,config,note)
     function self.stop(reason)
         self.stopped=true;self.reason=tostring(reason);self.release('STOPPED: '..self.reason)
     end
+    local function capacity(s)return math.min(config[s.group..'_max_charges'],s.budget or math.huge)end
+    local function duration(s)
+        return s.base_cd*config[s.group..'_cd_growth']^math.max(0,s.count-1)
+    end
+    local function rebase(s)
+        local cycle=duration(s)
+        assert(finite(cycle) and cycle>=1,'invalid reserve cycle')
+        if config.inherit_ratio and s.cycle and s.cycle~=cycle then s.progress=s.progress*cycle/s.cycle end
+        s.cycle=cycle
+    end
     local function accrue(s,until_time)
-        if until_time<=s.last_now then return end
+        if until_time<s.last_now or capacity(s)==0 then return end
         local begin=math.max(s.last_now,s.blocked_until)
         if until_time<s.blocked_until then return end
-        if s.count==0 then s.count=1;note(s.key..': full cooldown complete; count=1') end
-        if s.count>=config.max_charges then return end
+        if s.count==0 then s.count=1;rebase(s);note(s.key..': full cooldown complete; count=1') end
+        if s.count>=capacity(s) then s.progress=0;return end
         s.progress=s.progress+math.max(0,until_time-begin)/TICKS
-        while s.progress+1e-7>=s.cycle and s.count<config.max_charges do
+        while s.progress+1e-7>=s.cycle and s.count<capacity(s) do
             s.progress=math.max(0,s.progress-s.cycle);s.count=s.count+1
+            -- Surplus frame time belongs to the next stage as real elapsed time;
+            -- it is not an inherited percentage of the stage that just completed.
+            s.cycle=duration(s)
             note(s.key..': reserve gained; count='..s.count)
         end
         -- No hidden overflow credit once the capacity is reached.
-        if s.count>=config.max_charges then s.progress=0 end
+        if s.count>=capacity(s) then s.progress=0 end
     end
     local function attach(x)
         for _,field in ipairs{'now','start','arrival','deadline'}do
             assert(finite(x[field]) and x[field]>=0 and x[field]<9007199254740991,'invalid '..field..' timestamp')
         end
-        assert(x.uses==0xffffffff,'target current uses is modified; expected native unlimited')
+        local limited=x.native_uses and x.native_uses~=0xffffffff
+        assert((not limited and x.uses==0xffffffff) or (limited and x.uses>=0 and x.uses<=x.native_uses),
+            'target current uses is modified; expected native allowance')
         assert(finite(x.base_cd) and x.base_cd>=1 and x.base_cd<=3600,'invalid effective cooldown')
         local block=math.max(x.deadline,x.arrival)
-        local s={key=x.key,group=x.group,id=x,count=block>x.now and 0 or 1,progress=0,
-            cycle=x.base_cd,last_now=x.now,last_start=x.start,blocked_until=block,
+        local s={key=x.key,group=x.group,id=x,count=(block>x.now or x.uses==0) and 0 or 1,progress=0,
+            budget=limited and x.uses or nil,base_cd=x.base_cd,cycle=x.base_cd,last_now=x.now,last_start=x.start,blocked_until=block,
             expected=x.uses,edits={}}
         self.slots[x.key]=s
-        edit(s,'uses',x.uses,math.max(1,s.count));s.expected=math.max(1,s.count)
+        local wanted=s.budget==0 and 0 or math.max(1,s.count)
+        edit(s,'uses',x.uses,wanted);s.expected=wanted
         note(x.key..': attached; count='..s.count..'; cycle='..s.cycle)
         return s
     end
@@ -112,14 +134,18 @@ function M.new(adapter,config,note)
             assert(x.start>s.last_start,'short cooldown deadline changed by another writer')
             s.edits.deadline=nil -- a new native dispatch/failure superseded that timestamp
         end
-        s.cycle=x.base_cd
-        s.count=math.min(s.count,config.max_charges)
+        s.base_cd=x.base_cd
+        s.count=math.min(s.count,capacity(s));rebase(s)
         if not paused then
             -- Credit only the ready portion before the native call started.
             accrue(s,x.start>s.last_start and math.min(x.now,x.start) or x.now)
         end
         if dispatched then
             s.count=s.count-1
+            if s.budget then
+                s.budget=s.budget-1;s.edits.uses.old=s.budget;s.edits.uses.last=x.uses;s.last_start=x.start
+            end
+            rebase(s)
             if s.count>0 then
                 local deadline=x.arrival+math.floor(config.short_cooldown*TICKS+0.5)
                 edit(s,'deadline',x.deadline,deadline);x.deadline=deadline
@@ -127,18 +153,19 @@ function M.new(adapter,config,note)
             note(s.key..': native call consumed; count='..s.count..'; cooldown='..(s.count>0 and 'short' or 'full'))
         end
         s.blocked_until=math.max(x.deadline,x.arrival)
-        if not paused and not dispatched and s.count==0 and x.now>=s.blocked_until then
+        if not paused and not dispatched and s.count==0 and capacity(s)>0 and x.now>=s.blocked_until then
             s.count=1
+            rebase(s)
         end
         -- A native count of 0 selects EXHAUSTED before COOLDOWN in the HUD.
         -- Keep one inaccessible sentinel during full cooldown; present 0 in the HUD.
-        local wanted=math.max(1,s.count)
+        local wanted=s.budget==0 and 0 or math.max(1,s.count)
         if x.uses~=wanted then edit(s,'uses',x.uses,wanted) end
         s.edits.uses.last=wanted -- accepted native decrements remain ours to restore
         s.expected=wanted;s.last_now=x.now;s.last_start=x.start;s.id=x
         s.ready=not paused and x.now>=s.blocked_until
         s.display={count=s.count,ready=s.ready,
-            charging=s.ready and s.count<config.max_charges,
+            charging=s.ready and s.count<capacity(s),
             remaining=math.max(0,s.cycle-s.progress),cycle=s.cycle}
         if not paused then adapter.hud(x,s.display) end
     end
@@ -149,7 +176,7 @@ function M.new(adapter,config,note)
         if not context or context.inactive then self.release();return end
         local seen={}
         for _,x in ipairs(context.targets) do
-            if (x.group=='green' and config.green_enabled) or (x.group=='blue' and config.blue_enabled) then
+            if config[x.group..'_enabled'] then
                 seen[x.key]=true;process(x,context.paused)
             end
         end
