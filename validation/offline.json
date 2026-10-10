@@ -1,0 +1,18 @@
+{
+  "status": "OFFLINE_PASSED",
+  "test_cases": 45,
+  "source_sha256": "0e34189800b39eedbdd21d1a0b2eb95c94ff4b3e1453946c007788e0e78b9808",
+  "engine": "LuaJIT 2.1 via lupa 2.8",
+  "supported_steam_build": 25480438,
+  "ingame_tested": false,
+  "multiplayer_tested": false,
+  "native_memory": "simulated",
+  "native_dispatch": "simulated",
+  "hud_rendering": "not tested",
+  "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
+  "defaults": {
+    "max_charges": 3,
+    "short_cooldown": 5,
+    "target": "LATOneshot/147"
+  }
+}

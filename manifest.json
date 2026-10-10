@@ -1,0 +1,15 @@
+{
+  "Version": 1,
+  "Guid": "e9bc7209-4ac6-4c86-a211-1cf1e44e45c4",
+  "Name": "\u6218\u5907\u6b21\u6570\u50a8\u5b58 / Stratagem Reserve v0.1.0",
+  "Description": "EAT-17 \u5b9e\u9a8c\u7248\u3002\u5c31\u7eea\u540e\u7ee7\u7eed\u84c4\u6b21\u6570\uff1b\u6b21\u6570\u672a\u7528\u5b8c\u65f6\u91c7\u7528\u77ed\u51b7\u5374\u3002MODS \u53ef\u8c03\u603b\u6b21\u6570\u4e0a\u9650\u548c\u77ed\u51b7\u5374\u3002\u9700 Bingus Shared Loader v18 \u4e0e ModOptionsMenu API 1 / version 2+\u3002\u4ec5\u652f\u6301 build 25480438\uff0c\u5c1a\u672a\u5b9e\u673a\u6216\u8054\u673a\u9a8c\u8bc1\u3002",
+  "Options": [
+    {
+      "Name": "EAT-17 \u6b21\u6570\u50a8\u5b58",
+      "Description": "\u9ed8\u8ba4\u4e0a\u9650 3 \u6b21\uff0c\u77ed\u51b7\u5374 5 \u79d2\u3002\u53ea\u5f71\u54cd\u672c\u673a\u73a9\u5bb6\uff1b\u539f\u751f\u90e8\u7f72\u65f6\u95f4\u4fdd\u7559\u3002",
+      "Include": [
+        "Core"
+      ]
+    }
+  ]
+}

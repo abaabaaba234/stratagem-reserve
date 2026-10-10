@@ -1,0 +1,94 @@
+{
+  "steam_build": 25480438,
+  "snapshot_current_install_check": "PASS; 365 files checked on 2026-10-11 using verify_snapshot.py --current-game",
+  "decoded_reference_equivalence": "NOT ESTABLISHED",
+  "code_capture_sha256": "373fd67e02bbf277494bfa8357acbcbc5a7e2a309b5f0b20578c7b383996658b",
+  "code_capture_origin": "eagle-carpet-bomb/research/current/code.bin; historical read-only capture, not new gameplay proof",
+  "stratagem_reference_sha256": "79f08fb1685870db3fb13bb6a0c88871d82ebc0336844119588bcbde6f698aae",
+  "native_source_sha256": "8024824f0d1fab8d9d5a1d819e2ebbcdeb8abea65024cdb479f43e99909ffbf5",
+  "target_source_sha256": "ba257dc33bfc701da4f862795f1cfec41618f222489a2f91c751f5d73cf967a5",
+  "anchors": [
+    {
+      "rva": "0x1366dc0",
+      "expected_hex": "448b8900d2020033c04c8bd14585c974164c8bc1493910",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x66d3d0",
+      "expected_hex": "4883ec28418bc04c8d1522e21503488d0c404803c98b84ca8c010000",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x135c6f5",
+      "expected_hex": "418d40ff48898cfde001000083f8fd773441ffc8448984fdc4010000",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x135c41b",
+      "expected_hex": "4889841fd8010000",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x8796a0",
+      "expected_hex": "488bc44883ec780f2970d8440f2940b8",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x1836bea",
+      "expected_hex": "f3410f108720370000410f2fc3760ac744245404000000",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x143dd60",
+      "expected_hex": "48895c24084889742410574883ec204885d2",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x14508e0",
+      "expected_hex": "4883ec28448b014c8bd1418bc0458bc883e0ef4183c91084d2440f44c8",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x1836759",
+      "expected_hex": "8945d0418b94ca880100004189974c370000",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x1838092",
+      "expected_hex": "498d8f28200000e8d25dc0ff",
+      "matched_capture": true
+    }
+  ],
+  "target": {
+    "type": 147,
+    "internal_name": "LATOneshot",
+    "title": "TEAM WEAPONS. EXPENDABLE ANTI-TANK",
+    "category": 2,
+    "uses": 4294967295,
+    "timings": [
+      2.0,
+      0.0,
+      0.0,
+      3.0,
+      0.0,
+      70.0
+    ],
+    "origin": 0,
+    "cooldown_type": 0,
+    "package": "0000000000000000",
+    "payload": [
+      "0dc7a18342b62bec",
+      "73f8498bffdcf415"
+    ]
+  },
+  "slot_layout": {
+    "stride": 48,
+    "type": 0,
+    "current_uses": 4,
+    "call_start": 16,
+    "cooldown_endpoint": 24,
+    "arrival_endpoint": 32
+  },
+  "hud_binding": "match native row slot index and type; count uses native card; recharge text uses ready status widget",
+  "hud_position_ingame_verified": false
+}
