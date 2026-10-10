@@ -46,6 +46,11 @@ function M.new(targets,note)
     note=note or function()end
     local api={writes=0,hud_updates=0}
     local process=kernel.GetCurrentProcess()
+    local by_type={}
+    for _,t in ipairs(targets)do
+        assert(not by_type[t.type_id] and (t.group=='green' or t.group=='blue'),'invalid target registry')
+        by_type[t.type_id]=t
+    end
     local buffer=ffi.new('uint8_t[512]');local got=ffi.new('size_t[1]')
     local mbi=ffi.new('uint8_t[48]')
     local function read(p,n)
@@ -134,7 +139,7 @@ function M.new(targets,note)
         for n=0,8 do if c==b:sub(1,n)..a:sub(n+1)then return true end end
         return false
     end
-    function api.snapshot()
+    function api.snapshot(config)
         if not build() then return {inactive=true} end
         local scene=ptr(base+0x3326340)
         if not scene or uint(scene+0xac21c)~=4 then return {inactive=true} end
@@ -159,21 +164,22 @@ function M.new(targets,note)
         local result={paused=paused,targets={}}
         local upgrades=ptr(base+0x33264f8)
         if not upgrades or upgrades<0x10000 then return {inactive=true} end
-        for _,t in ipairs(targets) do
-            local def=definition(t)
-            if def then
-                local found
-                for slot=0,rows-1 do
-                    local address=entry+0x1c0+slot*48
-                    if uint(address)==t.type_id then
-                        assert(not found,'duplicate target slots');found=true
-                        local b=assert(read(address,48),'target slot unavailable')
-                        local cycle=tonumber(effective_cd(upgrades,ffi.cast('uint64_t *',owner)[0],t.type_id,0,0))
-                        result.targets[#result.targets+1]={key=t.key,type_id=t.type_id,manager=manager,
-                            entry=entry,owner=owner,slot=slot,address=address,definition=def,
-                            clock=clock,now=now,uses=u32(b,4),start=u64(b,0x10),
-                            deadline=u64(b,0x18),arrival=u64(b,0x20),base_cd=cycle,hud=hud}
-                    end
+        local found={}
+        -- Check only equipped, enabled targets. An unrelated or disabled definition
+        -- must not stop the active group, nor impose reads for the entire registry.
+        for slot=0,rows-1 do
+            local address=entry+0x1c0+slot*48
+            local t=by_type[uint(address)]
+            if t and config[t.group..'_enabled'] then
+                local def=definition(t)
+                if def then
+                    assert(not found[t.type_id],'duplicate target slots');found[t.type_id]=true
+                    local b=assert(read(address,48),'target slot unavailable')
+                    local cycle=tonumber(effective_cd(upgrades,ffi.cast('uint64_t *',owner)[0],t.type_id,0,0))
+                    result.targets[#result.targets+1]={key=t.key,group=t.group,type_id=t.type_id,manager=manager,
+                        entry=entry,owner=owner,slot=slot,address=address,definition=def,
+                        clock=clock,now=now,uses=u32(b,4),start=u64(b,0x10),
+                        deadline=u64(b,0x18),arrival=u64(b,0x20),base_cd=cycle,hud=hud}
                 end
             end
         end

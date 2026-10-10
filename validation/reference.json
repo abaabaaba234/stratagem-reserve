@@ -5,8 +5,8 @@
   "code_capture_sha256": "373fd67e02bbf277494bfa8357acbcbc5a7e2a309b5f0b20578c7b383996658b",
   "code_capture_origin": "eagle-carpet-bomb/research/current/code.bin; historical read-only capture, not new gameplay proof",
   "stratagem_reference_sha256": "79f08fb1685870db3fb13bb6a0c88871d82ebc0336844119588bcbde6f698aae",
-  "native_source_sha256": "fbbcfed1718eb98f1df6c8c802bb3b9dd4dc2ea5c83bcda3df904eebc95450b9",
-  "target_source_sha256": "ba257dc33bfc701da4f862795f1cfec41618f222489a2f91c751f5d73cf967a5",
+  "native_source_sha256": "d0d2038d3f9c55de4ec7592650c1f070771a4feb8876b15a3bc0ab99a282ba7a",
+  "target_source_sha256": "38261581ec9445bda6846e58b13de80b053d4e7c8e7385f4d36811c7fc437747",
   "anchors": [
     {
       "rva": "0x1366dc0",
@@ -69,27 +69,636 @@
       "matched_capture": true
     }
   ],
-  "target": {
-    "type": 147,
-    "internal_name": "LATOneshot",
-    "title": "TEAM WEAPONS. EXPENDABLE ANTI-TANK",
-    "category": 2,
-    "uses": 4294967295,
-    "timings": [
-      2.0,
-      0.0,
-      0.0,
-      3.0,
-      0.0,
-      70.0
-    ],
-    "origin": 0,
-    "cooldown_type": 0,
-    "package": "0000000000000000",
-    "payload": [
-      "0dc7a18342b62bec",
-      "73f8498bffdcf415"
-    ]
+  "targets": [
+    {
+      "type": 6,
+      "internal_name": "LaserGuidedMissileLauncher",
+      "title": "TEAM WEAPONS. COMMANDO",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        4.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "0000000000000000",
+      "payload": [
+        "a0e691598f32932f",
+        "73f8498bffdcf415"
+      ],
+      "group": "blue",
+      "key": "commando",
+      "label": "\u7a81\u51fb\u5175"
+    },
+    {
+      "type": 8,
+      "internal_name": "TurretFlamethrower",
+      "title": "SENTRYS. FLAMETHROWER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        100.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "1577e917ad1f287d",
+      "payload": [
+        "820cc3bafe962858",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretFlamethrower",
+      "label": "\u706b\u7130\u55b7\u5c04\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 9,
+      "internal_name": "TurretMannedAntiTank",
+      "title": "EMPLACEMENTS. ANTI TANK EMPLACEMENT",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "5a0f047f2695b403",
+      "payload": [
+        "2b11c9e4980ec479",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretMannedAntiTank",
+      "label": "\u53cd\u5766\u514b\u70ae\u53f0"
+    },
+    {
+      "type": 12,
+      "internal_name": "MineDeployer_AntiTank",
+      "title": "EMPLACEMENTS. ANTI-TANK MINE DEPLOYER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "12ce4bc7cddaf51c",
+      "payload": [
+        "25a2fd037b6ed25c",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "MineDeployer_AntiTank",
+      "label": "\u53cd\u5766\u514b\u5730\u96f7"
+    },
+    {
+      "type": 16,
+      "internal_name": "ExpendableMassiveRocketLauncher",
+      "title": "TEAM WEAPONS. EXPENDABLE MASSIVE ROCKET LAUNCHER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        3.0,
+        0.0,
+        140.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "fde8230c79315087",
+      "payload": [
+        "8a9e543022c18092",
+        "73f8498bffdcf415"
+      ],
+      "group": "blue",
+      "key": "leveller",
+      "label": "\u8361\u5e73\u8005"
+    },
+    {
+      "type": 22,
+      "internal_name": "EnergyShield",
+      "title": "EMPLACEMENTS. SHIELD GENERATOR RELAY",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        90.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "fe0db34ac2b9ac61",
+      "payload": [
+        "ed13ddc480ec6910",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "EnergyShield",
+      "label": "\u9632\u62a4\u7f69\u751f\u6210\u4e2d\u7ee7\u5668"
+    },
+    {
+      "type": 23,
+      "internal_name": "TurretLaserCannon",
+      "title": "SENTRIES. LASER CANNON SENTRY",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        150.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "36313bf684c1fd79",
+      "payload": [
+        "56070f36cfffa8a8",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretLaserCannon",
+      "label": "\u6fc0\u5149\u70ae\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 39,
+      "internal_name": "ExpendableNapalmLauncher",
+      "title": "TEAM WEAPONS. EXPENDABLE NAPALM LAUNCHER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        3.0,
+        0.0,
+        140.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "0000000000000000",
+      "payload": [
+        "20aafc3a504d2e5f",
+        "73f8498bffdcf415"
+      ],
+      "group": "blue",
+      "key": "napalm_launcher",
+      "label": "\u6d88\u8017\u6027\u51dd\u56fa\u6c7d\u6cb9\u5f39"
+    },
+    {
+      "type": 44,
+      "internal_name": "TurretMortar_Staticfield",
+      "title": "SENTRYS. MORTAR STATICFIELD",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "4666692b63185121",
+      "payload": [
+        "b2053a1838092f8b",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretMortar_Staticfield",
+      "label": "\u9759\u7535\u8feb\u51fb\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 46,
+      "internal_name": "MineDeployer_GasMines",
+      "title": "EMPLACEMENTS. GAS MINE DEPLOYER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "ef8edb7b47d8f0b3",
+      "payload": [
+        "a9982969137f3d77",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "MineDeployer_GasMines",
+      "label": "\u6bd2\u6c14\u5730\u96f7"
+    },
+    {
+      "type": 52,
+      "internal_name": "TurretMortar_Gas",
+      "title": "SENTRYS. MORTAR GAS",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "71d9ea5d656b09b8",
+      "payload": [
+        "299c0d3dfd2f0994",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretMortar_Gas",
+      "label": "\u6bd2\u6c14\u8feb\u51fb\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 53,
+      "internal_name": "TurretRocket",
+      "title": "SENTRYS. ROCKET",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        150.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "11bbdf8ce39e5fc5",
+      "payload": [
+        "37079568dc86e9c6",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretRocket",
+      "label": "\u706b\u7bad\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 59,
+      "internal_name": "Cover_Grenade_Launcher",
+      "title": "EMPLACEMENTS. DEFENSE WALL GRENADE LAUNCHER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "9d4eb484c405e7a2",
+      "payload": [
+        "0c8257d1c0255593",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "Cover_Grenade_Launcher",
+      "label": "\u69b4\u5f39\u53d1\u5c04\u5668\u9632\u5fa1\u5899"
+    },
+    {
+      "type": 66,
+      "internal_name": "TurretMachinegun",
+      "title": "SENTRYS. GATLING",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        150.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "992d325d88de5fbf",
+      "payload": [
+        "ef85d6cf58e31d70",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretMachinegun",
+      "label": "\u52a0\u7279\u6797\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 89,
+      "internal_name": "MiniMissile",
+      "title": "TEAM WEAPONS. MINI MISSILE SILO",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        4.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "2947afe42093062f",
+      "payload": [
+        "de18775fa447a9bf",
+        "fbe75ec44e7c9a50"
+      ],
+      "group": "blue",
+      "key": "missile_silo",
+      "label": "\u5355\u5175\u5bfc\u5f39\u53d1\u5c04\u4e95"
+    },
+    {
+      "type": 99,
+      "internal_name": "Expendable_Machinegun",
+      "title": "TEAM WEAPONS. EXPENDABLE MACHINEGUN",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        4.0,
+        0.0,
+        70.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "b75f652bed19144a",
+      "payload": [
+        "c87555eed1e9f092",
+        "73f8498bffdcf415"
+      ],
+      "group": "blue",
+      "key": "bullet_storm",
+      "label": "\u5b50\u5f39\u98ce\u66b4"
+    },
+    {
+      "type": 104,
+      "internal_name": "TurretTesla",
+      "title": "EMPLACEMENTS. TESLA TOWER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "8abffb1f5544121b",
+      "payload": [
+        "74599e56f72f9d7e",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretTesla",
+      "label": "\u7279\u65af\u62c9\u5854"
+    },
+    {
+      "type": 117,
+      "internal_name": "TurretMortar",
+      "title": "SENTRYS. MORTAR",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "8c5a99a9a40d5b8d",
+      "payload": [
+        "51a0812e3bce2d74",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretMortar",
+      "label": "\u8feb\u51fb\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 119,
+      "internal_name": "MineDeployer",
+      "title": "EMPLACEMENTS. ANTI-PERSONNEL MINE DEPLOYER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "a4946425b2c70017",
+      "payload": [
+        "f00c349422e8e320",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "MineDeployer",
+      "label": "\u53cd\u6b65\u5175\u5730\u96f7"
+    },
+    {
+      "type": 120,
+      "internal_name": "HellbombBackpack",
+      "title": "BACKPACK. HELLBOMB",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        5.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        300.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "346d785d6ca13ff4",
+      "payload": [
+        "77c52e494527aa8a",
+        "73f8498bffdcf415"
+      ],
+      "group": "blue",
+      "key": "hellbomb_backpack",
+      "label": "\u4fbf\u643a\u5f0f\u5730\u72f1\u706b\u80cc\u5305"
+    },
+    {
+      "type": 121,
+      "internal_name": "TurretMachinegunGPMG",
+      "title": "SENTRYS. MACHINEGUN",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        90.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "154bd6143819df7d",
+      "payload": [
+        "37cde43876ba26bb",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretMachinegunGPMG",
+      "label": "\u673a\u67aa\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 137,
+      "internal_name": "TurretAutocannon",
+      "title": "SENTRYS. AUTOCANNON",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        150.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "54dc633a67baa93d",
+      "payload": [
+        "54d86057f5dacfb9",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretAutocannon",
+      "label": "\u673a\u70ae\u54e8\u6212\u70ae"
+    },
+    {
+      "type": 139,
+      "internal_name": "MineDeployer_IncendiaryMines",
+      "title": "EMPLACEMENTS. INCENDIARY MINE DEPLOYER",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        120.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "335a97fa3774906e",
+      "payload": [
+        "bf32e12923a9a252",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "MineDeployer_IncendiaryMines",
+      "label": "\u71c3\u70e7\u5730\u96f7"
+    },
+    {
+      "type": 144,
+      "internal_name": "TurretManned",
+      "title": "EMPLACEMENTS. HEAVY MACHINEGUN EMPLACEMENT",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        180.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "68e80476c1c602f5",
+      "payload": [
+        "0e977c49db7604f9",
+        "73f8498bffdcf415"
+      ],
+      "group": "green",
+      "key": "TurretManned",
+      "label": "\u91cd\u673a\u67aa\u70ae\u53f0"
+    },
+    {
+      "type": 147,
+      "internal_name": "LATOneshot",
+      "title": "TEAM WEAPONS. EXPENDABLE ANTI-TANK",
+      "category": 2,
+      "uses": 4294967295,
+      "timings": [
+        2.0,
+        0.0,
+        0.0,
+        3.0,
+        0.0,
+        70.0
+      ],
+      "origin": 0,
+      "cooldown_type": 0,
+      "package": "0000000000000000",
+      "payload": [
+        "0dc7a18342b62bec",
+        "73f8498bffdcf415"
+      ],
+      "group": "blue",
+      "key": "eat17",
+      "label": "EAT-17 \u6d88\u8017\u6027\u53cd\u5766\u514b\u6b66\u5668"
+    }
+  ],
+  "group_counts": {
+    "green": 18,
+    "blue": 7
   },
   "slot_layout": {
     "stride": 48,

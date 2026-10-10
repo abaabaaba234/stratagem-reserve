@@ -1,7 +1,7 @@
 {
   "status": "OFFLINE_PASSED",
-  "test_cases": 49,
-  "source_sha256": "e67f81aed4adeaf493c46eaf2f146865c5805867e6b951e2c38a5e43875fa103",
+  "test_cases": 61,
+  "source_sha256": "90fe84c4021ec89d87b021e865a41492864c1f82110e3f59b1995ca8469c768b",
   "engine": "LuaJIT 2.1 via lupa 2.8",
   "supported_steam_build": 25480438,
   "ingame_tested": false,
@@ -11,8 +11,14 @@
   "hud_rendering": "not tested",
   "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
   "defaults": {
+    "enabled": true,
+    "green_enabled": true,
+    "blue_enabled": true,
     "max_charges": 3,
-    "short_cooldown": 5,
-    "target": "LATOneshot/147"
+    "short_cooldown": 5
+  },
+  "target_counts": {
+    "green": 18,
+    "blue": 7
   }
 }

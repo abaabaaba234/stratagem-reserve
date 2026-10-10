@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from build import bundle, murmur64, archive, RESOURCE
 
 SOURCE = bundle()
+REFERENCE_TARGETS = {t['type']: t for t in json.loads((ROOT / 'validation/reference.json').read_text())['targets']}
 BASE = 0x180000000
 U = lambda n: struct.pack("<I", n)
 Q = lambda n: struct.pack("<Q", n)
@@ -69,6 +70,8 @@ class Game:
         self.now = 1_000_000
         self.cooldown = 70.0
         self.pending_call = False
+        self.pending_slot = 0
+        self.target_slots = {}
         self.failure_call = False
         self.native_error = False
         self.texts = []
@@ -135,12 +138,13 @@ class Game:
         self.mem.put(self.row + 0x2028 + 0x11c, b"READY" + bytes(256))
         self.mem.put(self.card + 0xce0 + 0x110, Q(0))
         self.mem.put(self.card + 0xce0 + 0x11c, bytes(256))
+        self.target_slots[0] = (147, self.slot, self.row)
         self.lua = luajit21.LuaRuntime(encoding=None)
         g = self.lua.globals()
         g[b"pyread"] = lambda p, n: self.mem.read(int(p), int(n))
         g[b"pywrite"] = lambda p, b: self.mem.write(int(p), bytes(b))
         g[b"pyquery"] = lambda p: self.mem.query(int(p))
-        g[b"pycd"] = lambda *args: self.cooldown
+        g[b"pycd"] = lambda _upgrades, _owner, type_id, *_args: self.cooldown if int(type_id) == 147 else REFERENCE_TARGETS[int(type_id)]['timings'][-1]
         g[b"pytext"] = self.paint
         g[b"pyshown"] = lambda p, value: self.shown.append((int(p), int(value)))
         g[b"pycountdraw"] = self.draw_count
@@ -218,8 +222,43 @@ class Game:
         self.badge_width = len(str(count)) * 10 + 8
         self.shown.append((card + 0x920, 1))
 
-    def field(self, offset, fmt="I"):
-        return struct.unpack("<" + fmt, self.mem.read(self.slot + offset, struct.calcsize(fmt)))[0]
+    def add_target(self, type_id, slot=1):
+        """Independent captured identity at an additional local slot and HUD row."""
+        entry = REFERENCE_TARGETS[type_id]
+        address = self.manager + 0x1c0 + slot * 48
+        definition = 0x70000000 + type_id * 0x1000
+        raw = bytearray(400)
+        struct.pack_into('<I', raw, 0, type_id)
+        struct.pack_into('<I', raw, 0x3c, entry['category'])
+        struct.pack_into('<I', raw, 0x50, entry['uses'])
+        struct.pack_into('<f', raw, 0x68, entry['timings'][-1])
+        struct.pack_into('<I', raw, 0x94, entry['cooldown_type'])
+        struct.pack_into('<Q', raw, 0x98, definition + 0x300)
+        struct.pack_into('<I', raw, 0xa0, len(entry['payload']))
+        self.mem.put(definition, raw)
+        self.mem.put(definition + 0x300, b''.join(bytes.fromhex(p)[::-1] for p in entry['payload']))
+        self.mem.put(definition + 0x200, entry['internal_name'].encode() + bytes(64))
+        self.mem.put(BASE + 0x37cb600 + type_id * 8, Q(definition))
+        self.mem.put(BASE + 0x21d4aa0 + type_id * 8, Q(definition + 0x200))
+        self.mem.put(address, U(type_id) + U(0xffffffff) + bytes(40))
+        rows = max(slot + 1, struct.unpack('<I', self.mem.read(self.manager + 0x7c0, 4))[0])
+        self.mem.put(self.manager + 0x7c0, U(rows))
+        row = self.row + slot * 0x3760
+        self.mem.put(row + 0x36f0, bytes(112))
+        self.mem.put(row + 0x36f0, b'\1')
+        self.mem.put(row + 0x3748, U(slot))
+        self.mem.put(row + 0x374c, U(type_id))
+        self.mem.put(row + 0x3758, U(1))
+        self.mem.put(row + 0x7c0 + 0x14b8, U(slot) + U(1) + bytes(8) + U(type_id) + U(1))
+        self.mem.put(row + 0x2028 + 0x110, Q(0))
+        self.mem.put(row + 0x2028 + 0x11c, b'READY' + bytes(256))
+        self.mem.put(row + 0x7c0 + 0xce0 + 0x110, Q(0))
+        self.mem.put(row + 0x7c0 + 0xce0 + 0x11c, bytes(256))
+        self.target_slots[slot] = (type_id, address, row)
+        return address
+
+    def field(self, offset, fmt="I", slot=0):
+        return struct.unpack("<" + fmt, self.mem.read(self.target_slots[slot][1] + offset, struct.calcsize(fmt)))[0]
 
     def frame(self, dt):
         if self.native_error:
@@ -229,22 +268,27 @@ class Game:
         self.mem.put(self.clock + 0x18, Q(self.now))
         if self.pending_call:
             self.pending_call = False
-            if self.field(4) != 0 and self.now >= self.field(0x18, "Q"):
+            slot = self.pending_slot
+            type_id, address, _row = self.target_slots[slot]
+            if self.field(4, slot=slot) != 0 and self.now >= self.field(0x18, "Q", slot):
                 self.calls += 1
                 arrival = self.now + 3_000_000
-                self.mem.put(self.slot + 0x10, Q(self.now))
-                self.mem.put(self.slot + 0x20, Q(arrival))
-                self.mem.put(self.slot + 0x18, Q(arrival + round(self.cooldown * 1_000_000)))
-                if not self.failure_call and self.field(4) != 0xffffffff:
-                    self.mem.put(self.slot + 4, U(self.field(4) - 1))
+                self.mem.put(address + 0x10, Q(self.now))
+                self.mem.put(address + 0x20, Q(arrival))
+                cooldown = self.cooldown if type_id == 147 else REFERENCE_TARGETS[type_id]['timings'][-1]
+                self.mem.put(address + 0x18, Q(arrival + round(cooldown * 1_000_000)))
+                if not self.failure_call and self.field(4, slot=slot) != 0xffffffff:
+                    self.mem.put(address + 4, U(self.field(4, slot=slot) - 1))
                 self.failure_call = False
-        self.mem.put(self.row + 0x3758, U(3 if self.now < self.field(0x20, "Q") else 4 if self.now < self.field(0x18, "Q") else 1))
+        for slot, (_type_id, _address, row) in self.target_slots.items():
+            self.mem.put(row + 0x3758, U(3 if self.now < self.field(0x20, 'Q', slot) else 4 if self.now < self.field(0x18, 'Q', slot) else 1))
 
     def tick(self, dt=0):
         return self.lua.globals()[b"update"](dt, b"preserved")
 
-    def call(self, dt=0.1, fail=False):
+    def call(self, dt=0.1, fail=False, slot=0):
         self.pending_call = True
+        self.pending_slot = slot
         self.failure_call = fail
         return self.tick(dt)
 
@@ -441,14 +485,14 @@ class RuntimeTests(unittest.TestCase):
 
     def test_menu_late_registration_single_callbacks(self):
         g = self.game(); g.tick(); g.tick()
-        self.assertEqual(len(list(g.lua.globals()[b"menu_state"][b"callbacks"].keys())), 3)
+        self.assertEqual(len(list(g.lua.globals()[b"menu_state"][b"callbacks"].keys())), 5)
         g.lua.execute(b"menu_state.pending.stratagem_reserve_max_charges=7")
         for _ in range(121): g.tick()
         self.assertEqual(g.lua.globals()[b"menu_state"][b"pending"][b"stratagem_reserve_max_charges"], 7)
 
     def test_invalid_menu_values_leave_config_unchanged(self):
         g = self.game(); g.tick()
-        for key, value in [("max_charges", 0), ("max_charges", 2.5), ("short_cooldown", 0), ("short_cooldown", 5.25), ("enabled", 1)]:
+        for key, value in [("max_charges", 0), ("max_charges", 2.5), ("short_cooldown", 0), ("short_cooldown", 5.25), ("enabled", 1), ('green_enabled', 1), ('blue_enabled', 0)]:
             self.assertFalse(g.apply(key, value)[0])
         self.assertEqual(g.state[b"config"][b"max_charges"], 3)
 
@@ -463,7 +507,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(g.state[b"phase"], b"disabled"); self.assertEqual(g.mem.writes, [])
 
     def test_duplicate_load_does_not_add_hooks(self):
-        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.1.1")
+        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.2.0")
         g.tick(); self.assertEqual(g.lua.globals()[b"original_calls"], 2)
 
     def test_original_errors_propagate_and_next_frame_restores(self):
@@ -475,6 +519,132 @@ class RuntimeTests(unittest.TestCase):
     def test_shutdown_preserves_arguments_and_returns(self):
         g = self.game(); g.tick(); self.assertEqual(g.lua.globals()[b"shutdown"](b"bye"), (b"bye", 99))
         self.assertEqual(g.field(4), 0xffffffff)
+
+    def test_each_registered_target_consumes_short_then_full_and_restores(self):
+        for type_id, entry in REFERENCE_TARGETS.items():
+            if type_id == 147:
+                continue
+            with self.subTest(target=entry['internal_name']):
+                g = self.game(); address = g.add_target(type_id)
+                g.tick(); cycle = entry['timings'][-1]; g.tick(cycle)
+                self.assertEqual(g.field(4, slot=1), 2)
+                state = g.state[b'model'][b'slots'][entry['key'].encode()]
+                self.assertEqual(state[b'group'], entry['group'].encode())
+                self.assertEqual(state[b'cycle'], cycle)
+                g.call(slot=1)
+                self.assertEqual(g.field(4, slot=1), 1)
+                self.assertEqual(g.field(0x18, 'Q', 1) - g.field(0x20, 'Q', 1), 5_000_000)
+                g.tick(8); g.call(slot=1)
+                self.assertEqual(state[b'count'], 0)
+                self.assertEqual(g.field(0x18, 'Q', 1) - g.field(0x20, 'Q', 1), round(cycle * 1_000_000))
+                g.tick(cycle + 3)
+                self.assertEqual(state[b'count'], 1)
+                self.assertTrue(g.apply('enabled', False)[0])
+                self.assertEqual(g.mem.read(address + 4, 4), U(0xffffffff))
+
+    def test_green_and_blue_have_independent_cycles_and_debits(self):
+        g = self.game(); g.add_target(121); g.tick(); g.tick(140)
+        green = g.state[b'model'][b'slots'][b'TurretMachinegunGPMG']
+        self.assertEqual(g.display()[b'count'], 3); self.assertEqual(green[b'count'], 2)
+        green_progress = green[b'progress']
+        g.call()
+        self.assertEqual(g.display()[b'count'], 2); self.assertEqual(green[b'count'], 2)
+        self.assertAlmostEqual(green[b'progress'], green_progress + 0.1)
+        blue_progress = g.display()[b'progress']
+        g.call(slot=1)
+        self.assertEqual(green[b'count'], 1); self.assertEqual(g.display()[b'count'], 2)
+        self.assertAlmostEqual(g.display()[b'progress'], blue_progress)
+
+    def test_green_group_disable_restores_only_green_and_preserves_blue_progress(self):
+        g = self.game(); g.add_target(121); g.tick(); g.tick(140)
+        g.call(); g.call(slot=1)
+        blue_deadline = g.field(0x18, 'Q'); blue_progress = g.display()[b'progress']
+        full_green = g.field(0x20, 'Q', 1) + 90_000_000
+        self.assertTrue(g.apply('green_enabled', False)[0])
+        self.assertEqual(g.field(4, slot=1), 0xffffffff)
+        self.assertEqual(g.field(0x18, 'Q', 1), full_green)
+        self.assertEqual(g.field(4), 2); self.assertEqual(g.field(0x18, 'Q'), blue_deadline)
+        g.tick()
+        self.assertEqual(g.display()[b'progress'], blue_progress)
+        self.assertIsNone(g.state[b'model'][b'slots'][b'TurretMachinegunGPMG'])
+
+    def test_blue_group_disable_restores_only_blue_and_preserves_green_progress(self):
+        g = self.game(); g.add_target(121); g.tick(); g.tick(140)
+        green = g.state[b'model'][b'slots'][b'TurretMachinegunGPMG']
+        progress = green[b'progress']
+        self.assertTrue(g.apply('blue_enabled', False)[0])
+        self.assertEqual(g.field(4), 0xffffffff); self.assertEqual(g.field(4, slot=1), 2)
+        g.tick()
+        self.assertEqual(green[b'progress'], progress); self.assertIsNone(g.display())
+
+    def test_group_reenable_during_native_cooldown_does_not_grant_ready_use(self):
+        g = self.game(); g.add_target(121); g.tick(); g.tick(140); g.call(slot=1)
+        g.apply('green_enabled', False); g.apply('green_enabled', True); g.tick()
+        green = g.state[b'model'][b'slots'][b'TurretMachinegunGPMG']
+        self.assertEqual(green[b'count'], 0); self.assertEqual(green[b'progress'], 0)
+        self.assertEqual(g.field(0x18, 'Q', 1) - g.field(0x20, 'Q', 1), 90_000_000)
+        g.tick(93); self.assertEqual(green[b'count'], 1)
+
+    def test_master_disable_restores_every_group_and_blocks_reenable_until_master_on(self):
+        g = self.game(); g.add_target(121); g.tick(); g.tick(140); g.call(); g.call(slot=1)
+        g.apply('enabled', False)
+        for slot in (0, 1): self.assertEqual(g.field(4, slot=slot), 0xffffffff)
+        self.assertEqual(g.field(0x18, 'Q') - g.field(0x20, 'Q'), 70_000_000)
+        self.assertEqual(g.field(0x18, 'Q', 1) - g.field(0x20, 'Q', 1), 90_000_000)
+        g.apply('green_enabled', True); g.tick(20)
+        self.assertEqual(len(g.state[b'model'][b'slots']), 0)
+        g.apply('enabled', True); g.tick()
+        self.assertEqual(g.display()[b'count'], 0)
+
+    def test_disabled_group_does_not_read_or_write_its_invalid_definition(self):
+        g = self.game(cfg='green_enabled=0\n'); g.add_target(121)
+        g.mem.put(0x70000000 + 121 * 0x1000, bytes(400)); g.tick()
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
+        self.assertEqual(g.field(4, slot=1), 0xffffffff)
+
+    def test_equipped_target_guard_failure_restores_other_group(self):
+        g = self.game(); g.add_target(121); g.tick(); g.tick(140)
+        g.mem.put(0x70000000 + 121 * 0x1000 + 0x300, bytes(16)); g.tick()
+        self.assertEqual(g.state[b'phase'], b'stopped')
+        for slot in (0, 1): self.assertEqual(g.field(4, slot=slot), 0xffffffff)
+
+    def test_nonexpendable_support_mission_and_reward_slots_are_untouched(self):
+        for type_id in (92, 31, 33, 69, 15, 124, 107):
+            with self.subTest(type_id=type_id):
+                g = self.game(); address = g.add_target(121)
+                g.mem.put(address, U(type_id)); original = g.mem.read(address, 48)
+                g.tick(); g.tick(700)
+                self.assertEqual(g.mem.read(address, 48), original)
+                self.assertEqual(g.state[b'phase'], b'active')
+
+    def test_four_slots_share_cap_and_short_setting_without_sharing_counts(self):
+        g = self.game(); g.add_target(121, 1); g.add_target(6, 2); g.add_target(22, 3)
+        g.tick(); g.apply('max_charges', 4); g.apply('short_cooldown', 2.5); g.tick(210)
+        self.assertEqual([g.field(4, slot=i) for i in range(4)], [4, 3, 2, 3])
+        g.call(slot=2)
+        self.assertEqual([g.field(4, slot=i) for i in range(4)], [4, 3, 1, 3])
+        self.assertEqual(g.field(0x18, 'Q', 2) - g.field(0x20, 'Q', 2), 2_500_000)
+
+    def test_group_preferences_and_existing_configuration_are_persisted(self):
+        g = self.game(cfg='enabled=1\nmax_charges=6\nshort_cooldown=4.5\n'); g.tick()
+        self.assertTrue(g.state[b'config'][b'green_enabled']); self.assertTrue(g.state[b'config'][b'blue_enabled'])
+        self.assertEqual(g.state[b'config'][b'max_charges'], 6)
+        self.assertEqual(g.state[b'config'][b'short_cooldown'], 4.5)
+        g.apply('blue_enabled', False); g.apply('green_enabled', False)
+        text = g.cfg.read_text(encoding='utf8')
+        h = self.game(cfg=text); h.tick(); self.assertEqual(h.mem.writes, [])
+        self.assertFalse(h.state[b'config'][b'green_enabled']); self.assertFalse(h.state[b'config'][b'blue_enabled'])
+        self.assertEqual(h.state[b'config'][b'max_charges'], 6)
+        self.assertEqual(h.state[b'config'][b'short_cooldown'], 4.5)
+
+    def test_menu_has_global_group_toggles_and_adjustable_shared_short_cooldown(self):
+        g = self.game(); g.tick()
+        options = g.lua.globals()[b'menu_state'][b'options']
+        self.assertEqual(set(options.keys()), {b'stratagem_reserve_' + k for k in
+                         (b'enabled', b'green_enabled', b'blue_enabled', b'short_cooldown', b'max_charges')})
+        slider = options[b'stratagem_reserve_short_cooldown']
+        self.assertEqual((slider[b'min'], slider[b'max'], slider[b'step']), (1, 60, 0.5))
+        self.assertNotIn(b'EAT-17', options[b'stratagem_reserve_enabled'][b'label'])
 
     def test_hud_charging_keeps_native_ready_state(self):
         g = self.game(); g.tick(); g.tick(20)
@@ -530,5 +700,6 @@ if __name__ == "__main__":
               "ingame_tested": False, "multiplayer_tested": False,
               "native_memory": "simulated", "native_dispatch": "simulated", "hud_rendering": "not tested",
               "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
-              "defaults": {"max_charges": 3, "short_cooldown": 5, "target": "LATOneshot/147"}}
+              "defaults": {"enabled": True, "green_enabled": True, "blue_enabled": True, "max_charges": 3, "short_cooldown": 5},
+              "target_counts": {"green": 18, "blue": 7}}
     (ROOT / "validation/offline.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf8")

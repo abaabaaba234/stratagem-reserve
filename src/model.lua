@@ -43,10 +43,12 @@ function M.new(adapter,config,note)
         end
         return okay
     end
-    function self.release(reason)
+    function self.release(reason,group)
         local pending=0
         for key,s in pairs(self.slots) do
-            if restore(s) then self.slots[key]=nil else pending=pending+1 end
+            if not group or s.group==group then
+                if restore(s) then self.slots[key]=nil else pending=pending+1 end
+            end
         end
         self.cleanup_pending=pending
         if reason then note(reason..'; cleanup_pending='..pending) end
@@ -76,7 +78,7 @@ function M.new(adapter,config,note)
         assert(x.uses==0xffffffff,'target current uses is modified; expected native unlimited')
         assert(finite(x.base_cd) and x.base_cd>=1 and x.base_cd<=3600,'invalid effective cooldown')
         local block=math.max(x.deadline,x.arrival)
-        local s={key=x.key,id=x,count=block>x.now and 0 or 1,progress=0,
+        local s={key=x.key,group=x.group,id=x,count=block>x.now and 0 or 1,progress=0,
             cycle=x.base_cd,last_now=x.now,last_start=x.start,blocked_until=block,
             expected=x.uses,edits={}}
         self.slots[x.key]=s
@@ -143,10 +145,14 @@ function M.new(adapter,config,note)
     function self.tick()
         if self.stopped then self.release();return end
         if not config.enabled then self.release();return end
-        local context=adapter.snapshot()
+        local context=adapter.snapshot(config)
         if not context or context.inactive then self.release();return end
         local seen={}
-        for _,x in ipairs(context.targets) do seen[x.key]=true;process(x,context.paused) end
+        for _,x in ipairs(context.targets) do
+            if (x.group=='green' and config.green_enabled) or (x.group=='blue' and config.blue_enabled) then
+                seen[x.key]=true;process(x,context.paused)
+            end
+        end
         for key,s in pairs(self.slots) do
             if not seen[key] then assert(restore(s),'could not restore removed slot');self.slots[key]=nil end
         end
