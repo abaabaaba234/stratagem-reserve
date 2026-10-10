@@ -1,7 +1,7 @@
 {
   "status": "OFFLINE_PASSED",
-  "test_cases": 45,
-  "source_sha256": "0e34189800b39eedbdd21d1a0b2eb95c94ff4b3e1453946c007788e0e78b9808",
+  "test_cases": 49,
+  "source_sha256": "e67f81aed4adeaf493c46eaf2f146865c5805867e6b951e2c38a5e43875fa103",
   "engine": "LuaJIT 2.1 via lupa 2.8",
   "supported_steam_build": 25480438,
   "ingame_tested": false,

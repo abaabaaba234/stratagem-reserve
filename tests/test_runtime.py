@@ -73,6 +73,9 @@ class Game:
         self.native_error = False
         self.texts = []
         self.shown = []
+        self.rendered_counts = []
+        self.badge_width = 0
+        self.fail_draw = False
         self.calls = 0
         self.manager = 0x60000000
         self.clock = 0x62000000
@@ -140,6 +143,7 @@ class Game:
         g[b"pycd"] = lambda *args: self.cooldown
         g[b"pytext"] = self.paint
         g[b"pyshown"] = lambda p, value: self.shown.append((int(p), int(value)))
+        g[b"pycountdraw"] = self.draw_count
         g[b"pyreplace"] = lambda a, b: self.replace(a, b)
         g[b"pyframe"] = self.frame
         g[b"cfg_folder"] = str(self.folder).encode()
@@ -160,6 +164,7 @@ class Game:
               if kind=='float (*)(uintptr_t, uint64_t, uint32_t, uint8_t, uint8_t)'then assert(p==0x1808796a0);return pycd end
               if kind=='uint8_t (*)(uintptr_t, const char *)'then assert(p==0x18143dd60);return pytext end
               if kind=='void (*)(uintptr_t, uint8_t)'then assert(p==0x1814508e0);return pyshown end
+              if kind=='void (*)(uintptr_t)'then assert(p==0x18183ae60);return pycountdraw end
               return real.cast(kind,p)
           end
           local original=require;require=function(n)if n=='ffi'then return proxy end;return original(n)end
@@ -201,6 +206,17 @@ class Game:
         self.mem.put(p + 0x110, Q(0))
         self.mem.put(p + 0x11c, bytes(text) + bytes(256 - len(text)))
         return 1
+
+    def draw_count(self, card):
+        if self.fail_draw:
+            raise RuntimeError('draw failure')
+        card = int(card)
+        count = struct.unpack('<I', self.mem.read(card + 0x14bc, 4))[0]
+        # Model the native renderer's observable contract: integer substitution
+        # retains its existing text template and measures the badge after layout.
+        self.rendered_counts.append(count)
+        self.badge_width = len(str(count)) * 10 + 8
+        self.shown.append((card + 0x920, 1))
 
     def field(self, offset, fmt="I"):
         return struct.unpack("<" + fmt, self.mem.read(self.slot + offset, struct.calcsize(fmt)))[0]
@@ -283,7 +299,7 @@ class RuntimeTests(unittest.TestCase):
         g.tick(8); g.call(); self.assertEqual(g.display()[b"count"], 0)
         self.assertEqual(g.field(4), 1)  # inaccessible native sentinel
         self.assertEqual(g.field(0x18, "Q") - g.field(0x20, "Q"), 70_000_000)
-        self.assertIn((g.card + 0xce0, b"0"), g.texts)
+        self.assertIn(0, g.rendered_counts)
         g.call(); self.assertEqual(g.calls, 3)
         g.tick(73); self.assertEqual(g.display()[b"count"], 1)
 
@@ -395,7 +411,7 @@ class RuntimeTests(unittest.TestCase):
     def test_native_mutations_are_local_data_fields_only(self):
         g = self.game(); g.tick(); g.tick(140); g.call(); g.tick(8); g.call(); g.apply("enabled", False)
         self.assertTrue(g.mem.writes)
-        self.assertTrue(all((p, len(b)) in [(g.slot + 4, 4), (g.slot + 0x18, 8)] for p, b in g.mem.writes))
+        self.assertTrue(all((p, len(b)) in [(g.slot + 4, 4), (g.slot + 0x18, 8), (g.card + 0x14bc, 4)] for p, b in g.mem.writes))
 
     def test_mission_clock_rollback_retires_state(self):
         g = self.game(); g.tick(); g.tick(70); g.now = 1_000_000; g.tick()
@@ -447,7 +463,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(g.state[b"phase"], b"disabled"); self.assertEqual(g.mem.writes, [])
 
     def test_duplicate_load_does_not_add_hooks(self):
-        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.1.0")
+        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.1.1")
         g.tick(); self.assertEqual(g.lua.globals()[b"original_calls"], 2)
 
     def test_original_errors_propagate_and_next_frame_restores(self):
@@ -462,7 +478,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_hud_charging_keeps_native_ready_state(self):
         g = self.game(); g.tick(); g.tick(20)
-        self.assertIn((g.row + 0x2028, "蓄次数 00:50".encode()), g.texts)
+        self.assertIn((g.row + 0x2028, "储备补充 00:50".encode()), g.texts)
         self.assertEqual(struct.unpack("<I", g.mem.read(g.row + 0x3758, 4))[0], 1)
 
     def test_hud_at_cap_restores_original_status_text(self):
@@ -472,6 +488,28 @@ class RuntimeTests(unittest.TestCase):
     def test_wrong_hud_target_is_not_painted(self):
         g = self.game(); g.mem.put(g.row + 0x374c, U(146)); g.tick()
         self.assertEqual(g.texts, [])
+
+    def test_counter_uses_native_layout_and_keeps_template(self):
+        g = self.game(); g.tick(); g.tick(70)
+        self.assertEqual(g.rendered_counts[-1], 2)
+        self.assertGreater(g.badge_width, 0)
+        self.assertFalse(any(p == g.card + 0xce0 for p, _ in g.texts))
+
+    def test_zero_badge_restores_ui_cache_and_never_changes_gameplay_sentinel(self):
+        g = self.game(); g.tick(); g.call()
+        self.assertEqual(g.rendered_counts[-1], 0)
+        self.assertEqual(struct.unpack('<I', g.mem.read(g.card + 0x14bc, 4))[0], 1)
+        self.assertEqual(g.field(4), 1)
+
+    def test_double_digit_counter_runs_native_badge_sizing(self):
+        g = self.game(cfg='max_charges=10\n'); g.tick(); g.tick(630)
+        self.assertEqual(g.rendered_counts[-1], 10)
+        self.assertEqual(g.badge_width, 28)
+
+    def test_native_count_renderer_error_restores_ui_cache(self):
+        g = self.game(); g.tick(); g.fail_draw = True; g.call()
+        self.assertEqual(g.state[b'phase'], b'stopped')
+        self.assertEqual(struct.unpack('<I', g.mem.read(g.card + 0x14bc, 4))[0], 1)
 
     def test_package_contains_only_one_addon(self):
         b = archive(SOURCE); nt, nf = struct.unpack_from("<II", b, 4)

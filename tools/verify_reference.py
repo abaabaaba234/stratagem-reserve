@@ -44,7 +44,7 @@ def verify(code_path, reference_path):
         "target": eat,
         "slot_layout": {"stride": 48, "type": 0, "current_uses": 4, "call_start": 16,
                         "cooldown_endpoint": 24, "arrival_endpoint": 32},
-        "hud_binding": "match native row slot index and type; count uses native card; recharge text uses ready status widget",
+        "hud_binding": "match native row slot index and type; native count renderer formats and lays out badge; recharge text uses ready status widget",
         "hud_position_ingame_verified": False,
     }
     (ROOT / "validation/reference.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf8")

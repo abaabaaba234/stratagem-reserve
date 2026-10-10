@@ -37,6 +37,10 @@ local ANCHORS={
     -- Per-row type/index and status text object.
     {0x1836759,'8945d0418b94ca880100004189974c370000'},
     {0x1838092,'498d8f28200000e8d25dc0ff'},
+    -- Native count renderer: preserve the localized number template, measure text,
+    -- and resize its badge/background instead of replacing its string with plain text.
+    {0x183ae60,'48895c24104889742418574883ec30488db920090000'},
+    {0x183aef1,'448b86bc140000488d8ee00c0000ba357b2aabe8c71bc0ff488d8ee00c0000e88b32c1ff'},
 }
 function M.new(targets,note)
     note=note or function()end
@@ -65,7 +69,7 @@ function M.new(targets,note)
         return false
     end
     local base,checked=false,false
-    local effective_cd,text_set,shown
+    local effective_cd,text_set,count_draw
     local overlays={}
     local function build()
         if checked then return base end
@@ -81,7 +85,7 @@ function M.new(targets,note)
         end
         effective_cd=ffi.cast('float (*)(uintptr_t, uint64_t, uint32_t, uint8_t, uint8_t)',base+0x8796a0)
         text_set=ffi.cast('uint8_t (*)(uintptr_t, const char *)',base+0x143dd60)
-        shown=ffi.cast('void (*)(uintptr_t, uint8_t)',base+0x14508e0)
+        count_draw=ffi.cast('void (*)(uintptr_t)',base+0x183ae60)
         checked=true;note('Build 25480438 PE and native code anchors verified')
         return base
     end
@@ -201,8 +205,24 @@ function M.new(targets,note)
                 local card=row+0x7c0
                 local cardinfo=read(card+0x14b8,24)
                 if cardinfo and u32(cardinfo,0)==id.slot and u32(cardinfo,16)==id.type_id then
-                    text_set(card+0xce0,tostring(display.count));shown(card+0x920,1)
-                    api.hud_updates=api.hud_updates+1
+                    -- During full cooldown the gameplay slot contains a blocked
+                    -- sentinel, but the badge must show the real reserve count 0.
+                    -- Override only this UI cache for the native draw, then restore
+                    -- it so the next normal HUD tick can still detect changes.
+                    local cache=card+0x14bc
+                    local original=u32(cardinfo,4)
+                    local changed=original~=display.count
+                    if not changed or (api.valid(id) and uint(cache)==original
+                        and write(cache,packed(display.count,'uint32_t'))) then
+                        local okay,why=pcall(count_draw,card)
+                        local restored=not changed
+                        if changed and api.valid(id) and uint(cache)==display.count then
+                            restored=write(cache,packed(original,'uint32_t'))
+                        end
+                        assert(restored,'HUD count cache restore failed')
+                        assert(okay,'native HUD count renderer failed: '..tostring(why))
+                        api.hud_updates=api.hud_updates+1
+                    end
                 end
                 if display.charging and u32(tail,0x68)==1 then
                     local widget=row+0x2028
@@ -216,7 +236,7 @@ function M.new(targets,note)
                     end
                     local secs=math.ceil(display.remaining)
                     if e then
-                        e.last=string.format('蓄次数 %02d:%02d',math.floor(secs/60),secs%60)
+                        e.last=string.format('储备补充 %02d:%02d',math.floor(secs/60),secs%60)
                         text_set(widget,e.last)
                     end
                     -- Preserve the native ready icon, colours, input and widget layout.

@@ -1,6 +1,6 @@
 local existing=rawget(_G,'StratagemReserve')
 if existing then return existing end
-local S={version='0.1.0',phase='initializing',ingame_tested=false,multiplayer_tested=false}
+local S={version='0.1.1',phase='initializing',ingame_tested=false,multiplayer_tested=false}
 rawset(_G,'StratagemReserve',S)
 local loader=rawget(_G,'CowboyBingusModLoader')
 if type(loader)~='table' or loader.api~=1 or type(loader.open_log)~='function' or type(loader.jit)~='table' then
@@ -119,5 +119,5 @@ if type(jit)=='table' and type(jit.off)=='function'then
     for _,module in ipairs{native,model}do for _,fn in pairs(module)do if type(fn)=='function'then pcall(jit.off,fn,true)end end end
     pcall(jit.off,after,true)
 end
-S.phase='waiting';note('Stratagem Reserve 0.1.0 loaded; EAT-17 only; awaiting mission')
+S.phase='waiting';note('Stratagem Reserve 0.1.1 loaded; EAT-17 only; awaiting mission')
 return S

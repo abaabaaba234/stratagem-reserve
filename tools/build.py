@@ -8,7 +8,7 @@ import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 RESOURCE = "mods/stratagem_reserve/core"
 
 
@@ -53,7 +53,7 @@ def manifest():
         "Version": 1,
         "Guid": "e9bc7209-4ac6-4c86-a211-1cf1e44e45c4",
         "Name": "战备次数储存 / Stratagem Reserve v" + VERSION,
-        "Description": "EAT-17 实验版。就绪后继续蓄次数；次数未用完时采用短冷却。MODS 可调总次数上限和短冷却。需 Bingus Shared Loader v18 与 ModOptionsMenu API 1 / version 2+。仅支持 build 25480438，尚未实机或联机验证。",
+        "Description": "EAT-17 实验版。就绪后继续补充储备次数；次数未用完时采用短冷却。MODS 可调总次数上限和短冷却。需 Bingus Shared Loader v18 与 ModOptionsMenu API 1 / version 2+。仅支持 build 25480438，本版次数显示与联机效果待验证。",
         "Options": [{"Name": "EAT-17 次数储存", "Description": "默认上限 3 次，短冷却 5 秒。只影响本机玩家；原生部署时间保留。", "Include": ["Core"]}],
     }
 

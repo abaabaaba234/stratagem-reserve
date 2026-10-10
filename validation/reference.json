@@ -5,7 +5,7 @@
   "code_capture_sha256": "373fd67e02bbf277494bfa8357acbcbc5a7e2a309b5f0b20578c7b383996658b",
   "code_capture_origin": "eagle-carpet-bomb/research/current/code.bin; historical read-only capture, not new gameplay proof",
   "stratagem_reference_sha256": "79f08fb1685870db3fb13bb6a0c88871d82ebc0336844119588bcbde6f698aae",
-  "native_source_sha256": "8024824f0d1fab8d9d5a1d819e2ebbcdeb8abea65024cdb479f43e99909ffbf5",
+  "native_source_sha256": "fbbcfed1718eb98f1df6c8c802bb3b9dd4dc2ea5c83bcda3df904eebc95450b9",
   "target_source_sha256": "ba257dc33bfc701da4f862795f1cfec41618f222489a2f91c751f5d73cf967a5",
   "anchors": [
     {
@@ -57,6 +57,16 @@
       "rva": "0x1838092",
       "expected_hex": "498d8f28200000e8d25dc0ff",
       "matched_capture": true
+    },
+    {
+      "rva": "0x183ae60",
+      "expected_hex": "48895c24104889742418574883ec30488db920090000",
+      "matched_capture": true
+    },
+    {
+      "rva": "0x183aef1",
+      "expected_hex": "448b86bc140000488d8ee00c0000ba357b2aabe8c71bc0ff488d8ee00c0000e88b32c1ff",
+      "matched_capture": true
     }
   ],
   "target": {
@@ -89,6 +99,6 @@
     "cooldown_endpoint": 24,
     "arrival_endpoint": 32
   },
-  "hud_binding": "match native row slot index and type; count uses native card; recharge text uses ready status widget",
+  "hud_binding": "match native row slot index and type; native count renderer formats and lays out badge; recharge text uses ready status widget",
   "hud_position_ingame_verified": false
 }
