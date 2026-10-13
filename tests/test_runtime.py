@@ -21,6 +21,7 @@ from build import bundle, murmur64, archive, RESOURCE
 SOURCE = bundle()
 REFERENCE_TARGETS = {t['type']: t for t in json.loads((ROOT / 'validation/reference.json').read_text())['targets']}
 BASE = 0x180000000
+PROVIDER_CHECK = None
 U = lambda n: struct.pack("<I", n)
 Q = lambda n: struct.pack("<Q", n)
 F = lambda n: struct.pack("<f", n)
@@ -60,7 +61,7 @@ class Memory:
 
 
 class Game:
-    def __init__(self, cfg=None, loader=True, menu=True, bad_build=False):
+    def __init__(self, cfg=None, loader=True, menu=True, bad_build=False, cached=None):
         self.temp = tempfile.TemporaryDirectory()
         self.folder = Path(self.temp.name)
         self.cfg = self.folder / "StratagemReserve.cfg"
@@ -181,13 +182,15 @@ class Game:
         ''')
         if menu:
             self.lua.execute(b'''
-              menu_state={options={},values={},callbacks={},pending={},sets=0}
+              menu_state={options={},values={},callbacks={},pending={},sets=0,order={}}
               local s=menu_state;ModOptionsMenu={api=1,version=3}
               function ModOptionsMenu.register_option(id,spec)
-                  assert(not s.options[id]);assert(type(spec.mod)=='string' and #spec.mod<120)
+                  assert(not s.options[id]);assert(type(spec.mod)=='function')
+                  assert(#spec.mod()<120)
                   if spec.type=='toggle'then assert(type(spec.default)=='boolean')end
                   if spec.type=='slider'then assert(spec.default>=spec.min and spec.default<=spec.max)end
-                  s.options[id]=spec;s.values[id]=spec.default;return true
+                  if spec.type=='choice'then assert(spec.default==1 or spec.default==2)end
+                  s.options[id]=spec;s.order[#s.order+1]=id;s.values[id]=spec.default;return true
               end
               function ModOptionsMenu.on_change(id,fn)assert(not s.callbacks[id]);s.callbacks[id]=fn;return true end
               function ModOptionsMenu.get(id)return s.values[id]end
@@ -195,6 +198,15 @@ class Game:
               function menu_apply(key,value)local id='stratagem_reserve_'..key;local okay,why=s.callbacks[id](value)
                   if okay then s.values[id]=value end;return okay,why end
             ''')
+            if cached:
+                globals_ = self.lua.globals()
+                globals_[b'cached_values'] = self.lua.table_from({k.encode(): v for k, v in cached.items()})
+                self.lua.execute(b'''local register=ModOptionsMenu.register_option
+                    ModOptionsMenu.register_option=function(id,spec)
+                        local ok=register(id,spec)
+                        if cached_values[id]~=nil then menu_state.values[id]=cached_values[id]end
+                        return ok
+                    end''')
         self.state = self.lua.execute(SOURCE)
 
     def replace(self, a, b):
@@ -485,7 +497,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_menu_late_registration_single_callbacks(self):
         g = self.game(); g.tick(); g.tick()
-        self.assertEqual(len(list(g.lua.globals()[b"menu_state"][b"callbacks"].keys())), 12)
+        self.assertEqual(len(list(g.lua.globals()[b"menu_state"][b"callbacks"].keys())), 13)
         g.lua.execute(b"menu_state.pending.stratagem_reserve_blue_max_charges=7")
         for _ in range(121): g.tick()
         self.assertEqual(g.lua.globals()[b"menu_state"][b"pending"][b"stratagem_reserve_blue_max_charges"], 7)
@@ -507,7 +519,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(g.state[b"phase"], b"disabled"); self.assertEqual(g.mem.writes, [])
 
     def test_duplicate_load_does_not_add_hooks(self):
-        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.1")
+        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.2")
         g.tick(); self.assertEqual(g.lua.globals()[b"original_calls"], 2)
 
     def test_original_errors_propagate_and_next_frame_restores(self):
@@ -642,12 +654,144 @@ class RuntimeTests(unittest.TestCase):
     def test_menu_has_global_group_toggles_and_adjustable_shared_short_cooldown(self):
         g = self.game(); g.tick()
         options = g.lua.globals()[b'menu_state'][b'options']
-        keys = [b'enabled', b'inherit_ratio', b'short_cooldown']
+        keys = [b'language', b'enabled', b'inherit_ratio', b'short_cooldown']
         keys += [group + suffix for group in (b'red', b'green', b'blue') for suffix in (b'_enabled', b'_max_charges', b'_cd_growth')]
         self.assertEqual(set(options.keys()), {b'stratagem_reserve_' + k for k in keys})
         slider = options[b'stratagem_reserve_short_cooldown']
         self.assertEqual((slider[b'min'], slider[b'max'], slider[b'step']), (1, 60, 0.5))
-        self.assertNotIn(b'EAT-17', options[b'stratagem_reserve_enabled'][b'label'])
+        self.assertNotIn(b'EAT-17', options[b'stratagem_reserve_enabled'][b'label']())
+
+    def test_menu_language_first_bilingual_descriptions_and_provider_limits(self):
+        g = self.game(); g.tick(); state = g.lua.globals()[b'menu_state']
+        self.assertEqual(state[b'order'][1], b'stratagem_reserve_language')
+        language = state[b'options'][b'stratagem_reserve_language']
+        self.assertEqual(language[b'label'], b'Language')
+        self.assertEqual(list(language[b'choices'].values()), ['简体汉字'.encode(), b'English'])
+        self.assertEqual(language[b'default'], 1)
+        for option in state[b'options'].values():
+            title = option[b'mod']().decode()
+            label = option[b'label']() if callable(option[b'label']) else option[b'label']
+            desc = option[b'description']().decode()
+            self.assertLessEqual(len(title), 40); self.assertLessEqual(len(label.decode()), 64)
+            self.assertLessEqual(len(desc), 400)
+            self.assertIn('中文：', desc); self.assertIn('English:', desc)
+
+    def test_language_switch_preserves_gameplay_and_persists_both_directions(self):
+        g = self.game(cfg='blue_max_charges=6\nshort_cooldown=4.5\n'); g.tick(); g.tick(20)
+        before = dict(g.state[b'config'].items()); progress = g.display()[b'progress']
+        options = g.lua.globals()[b'menu_state'][b'options']
+        descriptions = {key: value[b'description']() for key, value in options.items()}
+        g.mem.writes.clear()
+        self.assertTrue(g.apply('language', 2)[0])
+        self.assertEqual(g.mem.writes, []); self.assertEqual(g.display()[b'progress'], progress)
+        self.assertEqual(options[b'stratagem_reserve_enabled'][b'mod'](), b'Stratagem Reserve')
+        self.assertEqual(options[b'stratagem_reserve_enabled'][b'label'](), b'Enable Stratagem Reserve (master)')
+        self.assertEqual(dict(g.state[b'config'].items()), before | {b'language': b'en'})
+        self.assertTrue(all(value[b'description']() == descriptions[key] for key, value in options.items()))
+        h = self.game(cfg=g.cfg.read_text(encoding='utf8')); h.tick()
+        self.assertEqual(h.lua.globals()[b'menu_state'][b'values'][b'stratagem_reserve_language'], 2)
+        self.assertEqual(h.state[b'config'][b'blue_max_charges'], 6)
+        self.assertTrue(h.apply('language', 1)[0]); self.assertIn('language=zh', h.cfg.read_text())
+        self.assertEqual(h.lua.globals()[b'menu_state'][b'options'][b'stratagem_reserve_enabled'][b'mod'](), '战备次数储存'.encode())
+
+    def test_old_and_invalid_language_configs_preserve_existing_settings(self):
+        for suffix in ('', 'language=bad\n'):
+            g = self.game(cfg='enabled=0\nblue_max_charges=6\nblue_cd_growth=1.5\n' + suffix)
+            g.tick(); c = g.state[b'config']
+            self.assertEqual(c[b'language'], b'zh'); self.assertFalse(c[b'enabled'])
+            self.assertEqual(c[b'blue_max_charges'], 6); self.assertEqual(c[b'blue_cd_growth'], 1.5)
+            g.apply('language', 2)
+            self.assertIn('blue_max_charges=6', g.cfg.read_text())
+            self.assertIn('language=en', g.cfg.read_text())
+
+    def test_language_rejects_invalid_choices_and_failed_saves(self):
+        g = self.game(); g.tick()
+        for value in (0, 3, 1.5, b'en', True, float('nan')):
+            self.assertFalse(g.apply('language', value)[0])
+            self.assertEqual(g.state[b'config'][b'language'], b'zh')
+        g.lua.globals()[b'pyreplace'] = lambda *_: 0
+        self.assertFalse(g.apply('language', 2)[0])
+        self.assertEqual(g.state[b'config'][b'language'], b'zh')
+
+    def test_independent_config_overrides_stale_menu_cache(self):
+        g = self.game(cfg='language=zh\nblue_max_charges=4\nenabled=0\n', cached={
+            'stratagem_reserve_language': 2, 'stratagem_reserve_blue_max_charges': 9,
+            'stratagem_reserve_enabled': True})
+        g.tick(); values = g.lua.globals()[b'menu_state'][b'values']
+        self.assertEqual(values[b'stratagem_reserve_language'], 1)
+        self.assertEqual(values[b'stratagem_reserve_blue_max_charges'], 4)
+        self.assertFalse(values[b'stratagem_reserve_enabled'])
+
+    def test_menu_v2_language_callbacks_remain_single_and_preserve_unapplied_edits(self):
+        g = self.game(); g.lua.globals()[b'ModOptionsMenu'][b'version'] = 2; g.tick()
+        state = g.lua.globals()[b'menu_state']
+        self.assertIsNone(state[b'options'][b'stratagem_reserve_language'][b'mod_id'])
+        state[b'pending'][b'stratagem_reserve_language'] = 2
+        state[b'pending'][b'stratagem_reserve_short_cooldown'] = 7.5
+        for _ in range(361): g.tick()
+        self.assertEqual(state[b'pending'][b'stratagem_reserve_language'], 2)
+        self.assertEqual(state[b'pending'][b'stratagem_reserve_short_cooldown'], 7.5)
+        self.assertEqual(state[b'sets'], 0); self.assertEqual(len(list(state[b'callbacks'].keys())), 13)
+
+    def test_menu_registration_failure_preserves_core_config_function(self):
+        g = self.game()
+        g.lua.execute(b'ModOptionsMenu.register_option=function()return false,"refused"end')
+        g.tick(); g.tick(70)
+        self.assertIn(b'refused', g.state[b'menu_error']); self.assertEqual(g.field(4), 2)
+
+    def test_actual_menu_provider_registration_apply_and_dynamic_refresh(self):
+        global PROVIDER_CHECK
+        path = os.environ.get('HD2_MOD_OPTIONS_MENU_SOURCE')
+        if not path: self.skipTest('external provider source not supplied')
+        source = Path(path).read_bytes()
+        def module(name):
+            marker = b'mom_files.' + name + b' = function(...)'
+            start = source.index(marker); end = source.index(b'\nmom_files.', start + len(marker))
+            return source[start:end]
+        g = self.game(menu=False)
+        g.lua.execute(br'''
+          local T={upper=string.upper,check=function()return true end,
+            length=function(s)local _,n=s:gsub('[^\128-\191]','');return n end}
+          mom={state={mods={},options={},option_count=0,values={},callbacks={},revision=0,
+            saved={stratagem_reserve_language='2',stratagem_reserve_enabled='false',stratagem_reserve_blue_max_charges='9'},
+            pending={},pending_count=0,refused={},refused_count=0,queued={}},
+            translation={T=T,tr=function(k)return k end},note=function()end,
+            TEXT_TEMPLATE=123,MAX_MODS=112,MAX_ROWS=32,
+            descriptor=function()return {},{} end}
+          mom_files={}
+        ''' + module(b'options') + b'\n' + module(b'api') + b'''
+          mom_files.options(mom);mom_files.api(mom);ModOptionsMenu=mom.api
+        ''')
+        g.tick(); mom = g.lua.globals()[b'mom']; state = mom[b'state']; api = mom[b'api']
+        self.assertTrue(g.state[b'menu_registered']); self.assertEqual(api[b'version'], 3)
+        self.assertEqual(len(state[b'mods']), 1); self.assertEqual(len(state[b'mods'][1][b'order']), 13)
+        self.assertEqual(state[b'mods'][1][b'order'][1][b'id'], b'stratagem_reserve_language')
+        self.assertEqual(api[b'get'](b'stratagem_reserve_language'), 1)
+        self.assertTrue(api[b'get'](b'stratagem_reserve_enabled'))
+        self.assertEqual(api[b'get'](b'stratagem_reserve_blue_max_charges'), 3)
+        descriptions = {key: value[b'description'] for key, value in state[b'options'].items()}
+        mom[b'set_pending'](b'stratagem_reserve_blue_max_charges', 6)
+        for _ in range(121): g.tick()
+        self.assertEqual(state[b'pending'][b'stratagem_reserve_blue_max_charges'], 6)
+        mom[b'set_pending'](b'stratagem_reserve_language', 2)
+        self.assertEqual(mom[b'apply_pending'](), 2)
+        mom[b'translation'][b'refresh']()
+        self.assertEqual(g.state[b'config'][b'language'], b'en')
+        self.assertEqual(g.state[b'config'][b'blue_max_charges'], 6)
+        self.assertEqual(state[b'mods'][1][b'title'], b'STRATAGEM RESERVE')
+        self.assertEqual(state[b'options'][b'stratagem_reserve_enabled'][b'label'], b'Enable Stratagem Reserve (master)')
+        self.assertEqual(state[b'options'][b'stratagem_reserve_language'][b'choices'][2], b'ENGLISH')
+        self.assertTrue(all(value[b'description'] == descriptions[key] for key, value in state[b'options'].items()))
+        for _ in range(121): g.tick()
+        self.assertTrue(all(len(value) == 1 for value in state[b'callbacks'].values()))
+        h = self.game(cfg=g.cfg.read_text(encoding='utf8')); h.tick()
+        self.assertEqual(h.state[b'config'][b'language'], b'en')
+        self.assertEqual(h.state[b'config'][b'blue_max_charges'], 6)
+        mom[b'set_pending'](b'stratagem_reserve_language', 1); mom[b'apply_pending']()
+        mom[b'translation'][b'refresh']()
+        self.assertEqual(state[b'mods'][1][b'title'], '战备次数储存'.encode())
+        PROVIDER_CHECK = {'version': 3, 'source_sha256': hashlib.sha256(source).hexdigest(),
+            'scope': 'actual API/options modules; text service and native UI descriptor mocked; no native hook or in-game rendering'}
 
     def test_hud_charging_keeps_native_ready_state(self):
         g = self.game(); g.tick(); g.tick(20)
@@ -857,11 +1001,13 @@ if __name__ == "__main__":
               "ingame_tested": False, "multiplayer_tested": False,
               "native_memory": "simulated", "native_dispatch": "simulated", "hud_rendering": "not tested",
               "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
-              "defaults": {"enabled": True, "red_enabled": True, "green_enabled": True, "blue_enabled": True,
+              "defaults": {"language": "zh", "enabled": True, "red_enabled": True, "green_enabled": True, "blue_enabled": True,
                            "red_max_charges": 3, "green_max_charges": 3, "blue_max_charges": 3,
                            "red_cd_growth": 1, "green_cd_growth": 1, "blue_cd_growth": 1,
                            "inherit_ratio": False, "short_cooldown": 5},
               "reserve_cycle_formula": "native_effective_cd * group_cd_growth ** max(0, stored_count - 1)",
               "orbital_laser_mission_limit": 3,
-              "target_counts": {"red": 13, "green": 18, "blue": 7}}
+              "target_counts": {"red": 13, "green": 18, "blue": 7},
+              "menu_descriptions": "Chinese and English in either selected language",
+              "real_menu_provider": PROVIDER_CHECK, "skipped_tests": len(result.skipped)}
     (ROOT / "validation/offline.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf8")

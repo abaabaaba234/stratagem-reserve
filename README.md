@@ -2,7 +2,9 @@
 
 为《HELLDIVERS 2》的轨道战备、防御设施和一次性装备增加可积累的呼叫次数。战备就绪后继续补充储备，有剩余次数时可在短冷却结束后再次呼叫，参数可在游戏内 **MODS** 菜单调整。
 
-[下载 v0.3.1 安装包](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.1) · [全部 Releases](https://github.com/abaabaaba234/stratagem-reserve/releases)
+[下载 v0.3.2 安装包](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.2) · [全部 Releases](https://github.com/abaabaaba234/stratagem-reserve/releases)
+
+v0.3.2 新增默认中文的 `Language` 选择，可切换本模组的标题与标签；所有菜单介绍在两种语言下始终同时显示中文和英文。储备、伤害、升级、冷却和原生额度规则沿用 v0.3.1。
 
 ## 前置与支持版本
 
@@ -51,6 +53,7 @@
 
 | 设置 | 范围 / 默认值 |
 | --- | --- |
+| Language（首行） | 简体汉字 / English，默认中文 |
 | 模组总开关 | 默认开启 |
 | 红、绿、蓝战备分组开关 | 各自独立，默认开启 |
 | 各组储存次数上限 | 1–10 次，默认各 3 次 |
@@ -62,9 +65,11 @@
 
 从旧版升级时，旧通用上限会迁移至蓝、绿两组；红组默认上限为 3。设置会自动保存。
 
+切换语言后点击应用，关闭并重新打开 Esc 菜单刷新标题和标签。语言只作用于本模组；旧配置缺少语言字段时使用中文，并保留已有设置。两种语言模式下，所有选项介绍都显示中英双语。
+
 ## 安装与升级
 
-1. 关闭游戏，从 Release 下载 `StratagemReserve_v0.3.1.zip`。
+1. 关闭游戏，从 Release 下载 `StratagemReserve_v0.3.2.zip`。
 2. 将 ZIP 导入 Arsenal 或 HD2MM，安装并启用上述前置和本模组。升级时替换旧模组条目。
 3. 按前置说明调整加载顺序。Arsenal 默认优先级下，Bingus Shared Loader 应位于列表底部；启用首项优先时则放在顶部。
 4. 执行 **Purge → Deploy**，重新启动游戏。不要同时使用两个管理器部署。
@@ -81,7 +86,7 @@
 
 ## 验证范围
 
-v0.3.1 的 **78 项离线测试通过**，覆盖多战备独立计数、三组上限与倍率、两种进度继承、暂停与短冷却、关闭和错误恢复、轨道激光额度以及安装包一致性。另核对了 38 个目标定义和 12 处原生代码特征。
+v0.3.2 的 **86 项离线测试通过**，在原有 78 项测试的基础上增加菜单语言、双语介绍、旧配置迁移与真实菜单 API 注册/应用/刷新检查。具体范围见 [离线报告](validation/offline.json)。原生适配与目标定义保留，参考记录含 38 个目标定义和 12 处原生代码特征。
 
 EAT-17 的次数积累、消耗、短冷却与完整冷却已有实机日志；次数显示和 v0.3.1 菜单文字已收到用户正常显示的反馈。尚未完成全部战备、增长倍率与联机场景的全面实机验证。
 
@@ -98,6 +103,95 @@ python -m venv .venv
 .\.venv\Scripts\python.exe tools\build.py
 ```
 
-输出为 `dist/StratagemReserve_v0.3.1.zip`。构建会运行测试并检查当前源码与验证记录；Release ZIP 包含补丁、管理器清单和两份验证报告。
+输出为 `dist/StratagemReserve_v0.3.2.zip`。构建会运行测试并检查当前源码与验证记录；Release ZIP 包含补丁、管理器清单和两份验证报告。
 
 新增目标需修改 `src/targets.lua` 并核对原生身份与次数语义。更新原生适配器或目标定义后，使用 `tools/verify_reference.py --code <代码捕获路径> --stratagems <参考JSON路径>` 重新生成参考验证记录。仓库中的数据身份与代码特征来自保留的 build 25480438 历史只读捕获；重新验证需要自行提供对应参考文件。
+
+## English
+
+Adds stored calls to supported orbital, defensive and expendable-equipment stratagems in HELLDIVERS 2. A ready stratagem continues accumulating charges; when charges remain after a call, it becomes usable again after a configurable short cooldown. This changes gameplay and the pace of stratagem use.
+
+[Download the v0.3.2 installation ZIP](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.2). GitHub's automatic source archives require a local build and are not installation packages.
+
+### Changes in v0.3.2
+
+Adds a persistent `Language` choice in the first MODS row, defaulting to Chinese. It changes this mod's title and labels. Every option description shows Chinese and English together in either language. Existing setting IDs, gameplay parameters, damage, upgrades and native-use limits are preserved.
+
+### Requirements
+
+- Bingus Shared Loader v18 / API 1.
+- The in-game MODS menu additionally requires ModOptionsMenu API 1 / version 2 or newer.
+- Steam build **25480438** / game EXE **1.8.46015.0**. Other builds have not been verified; game updates require checking the native data and code signatures again.
+
+Install the loader and menu separately. This ZIP contains this mod and its validation reports.
+
+### Supported stratagems
+
+| Group | Scope | Reference definitions |
+| --- | --- | ---: |
+| Red | Orbital strikes and barrages; excludes Eagles and mission stratagems | 13 |
+| Green | Sentries, mines, emplacements, barriers, shield relay and Tesla tower | 18 |
+| Blue | Seven expendable equipment types listed below | 7 |
+
+Blue equipment includes EAT-17, Commando, Leveller, Expendable Napalm, Solo Silo, Bullet Storm and the Portable Hellbomb backpack. Ordinary reloadable support weapons and other backpacks are excluded. Exact internal identities are recorded in the target source. The counts describe reference definitions; actual availability depends on the game.
+
+Orbital Laser retains its native **three-use limit per mission**. Storage changes when the remaining uses become ready; it never adds to the mission's total allowance. Exact target identities are recorded in [src/targets.lua](src/targets.lua).
+
+### Charges and cooldowns
+
+1. A stratagem initially becomes ready with one charge. Each additional refill cycle adds one until the group's cap.
+2. The bottom-right HUD count represents total available calls. Deployment and cooldown stages must still finish before another call.
+3. A successful call spends one charge. If any remain, native deployment is followed by the configured short cooldown. An empty reserve uses the full native cooldown.
+4. Refill pauses during deployment and cooldown while preserving progress. Refill uses the ready icon and a reserve countdown; actual cooldown uses the native unavailable state.
+5. Each stratagem has its own count. Group settings do not create a shared reserve.
+
+Refill uses the native effective cooldown, including ship upgrades and mission modifiers:
+
+```text
+refill duration = native effective cooldown * growth^(stored charges - 1)
+```
+
+At growth 1.5, storing 1/2/3 charges makes the next refill take 1/1.5/2.25 times the native cooldown. Default growth 1.0 keeps refill duration constant. Growth affects refill only; short cooldown and the full cooldown after exhausting charges retain their separate behavior.
+
+Progress inheritance defaults to elapsed time. Turning on percentage inheritance preserves the completed fraction when the refill duration changes. For example, 70/140 seconds becomes 70 seconds under time inheritance, or 35 seconds under percentage inheritance, when the cycle falls to 70 seconds. Refill still waits until short cooldown ends. A full reserve does not accumulate hidden extra progress.
+
+### MODS settings
+
+| Setting | Range / default |
+| --- | --- |
+| Language, first row | Chinese / English; Chinese default |
+| Master switch | On |
+| Red, green and blue switches | Independently on |
+| Each group's charge cap | 1–10; default 3 |
+| Each group's refill growth | 1.0–3.0 in steps of 0.1; default 1.0 |
+| Shared short cooldown | 1–60 seconds in steps of 0.5; default 5 |
+| Shared percentage inheritance | Off, preserving elapsed time |
+
+Apply changes in MODS. Close and reopen Esc after changing language to refresh titles and labels. All descriptions remain bilingual; game-wide language and other mods are unaffected. Old configurations without a language field default to Chinese while retaining their existing values.
+
+Lowering a cap trims excess charges; increasing it grants no free charges. A changed short cooldown applies to the next successful call. Disabling a group restores native fields still owned by this mod; re-enabling restarts storage. Used Orbital Laser allowance is never refunded. A legacy shared cap migrates to green and blue; red defaults to three.
+
+### Installation and troubleshooting
+
+1. Close the game and import `StratagemReserve_v0.3.2.zip` into Arsenal or HD2MM, replacing the old entry. Use one manager.
+2. Install and enable the loader, menu and this mod.
+3. Follow loader priority guidance: put Bingus Shared Loader at the bottom with Arsenal's default priority, or at the top with first-mod priority enabled.
+4. Run **Purge → Deploy**, restart the game, then open **Esc → MODS → Stratagem Reserve**.
+5. To uninstall, close the game, remove or disable the mod in the manager, and Purge → Deploy again.
+
+Settings and logs:
+
+```text
+%LOCALAPPDATA%\CowboyBingus\Helldivers2\Logs\StratagemReserve.cfg
+%LOCALAPPDATA%\CowboyBingus\Helldivers2\Logs\StratagemReserve.log
+```
+
+Unsupported versions, mismatched stratagem definitions or unexpected code signatures stop processing and log the reason. Mods that alter the same charge or cooldown fields may also trigger ownership protections.
+
+### Validation limits
+
+All **86 offline checks pass** for v0.3.2, retaining the original 78 checks and adding language, bilingual-description, configuration-migration and actual menu-API checks. See [validation/offline.json](validation/offline.json) for coverage. Native adapter and target sources are unchanged; reference evidence covers 38 definitions and 12 code signatures.
+
+Earlier EAT-17 charge accumulation, consumption and cooldown behavior had gameplay logs; users also confirmed v0.3.1 HUD/menu text. This release's new native UI rendering and gameplay have not been tested in-game. Full target coverage, growth settings, multiplayer and anti-cheat compatibility remain unverified. Offline checks use simulated memory/calls and do not establish those behaviors. The mod processes the local player's stratagem records.
+
+Build with Python 3.10+ and [requirements-dev.txt](requirements-dev.txt): run `python tests/test_runtime.py`, then `python tools/build.py`. The build validates source/report hashes and produces `dist/StratagemReserve_v0.3.2.zip` with a loader-discoverable Lua patch, manager manifest and two validation reports. Native-reference regeneration requires supplying the corresponding historical build-25480438 capture and stratagem JSON to `tools/verify_reference.py`.

@@ -1,7 +1,7 @@
 {
   "status": "OFFLINE_PASSED",
-  "test_cases": 78,
-  "source_sha256": "9b4635bdd4595058b2a6c344a4a4aa4f63dee4601c3c4e43c0c0c5436fe8f301",
+  "test_cases": 86,
+  "source_sha256": "ce45f2d9e606fabcdacd10253b65830b049826ff9c7a25824ac80d6686cd3c0e",
   "engine": "LuaJIT 2.1 via lupa 2.8",
   "supported_steam_build": 25480438,
   "ingame_tested": false,
@@ -11,6 +11,7 @@
   "hud_rendering": "not tested",
   "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",
   "defaults": {
+    "language": "zh",
     "enabled": true,
     "red_enabled": true,
     "green_enabled": true,
@@ -30,5 +31,12 @@
     "red": 13,
     "green": 18,
     "blue": 7
-  }
+  },
+  "menu_descriptions": "Chinese and English in either selected language",
+  "real_menu_provider": {
+    "version": 3,
+    "source_sha256": "e03334c76d9b4b064378076a08d7e85e11e757bafa9fc0380aff5669fee13c07",
+    "scope": "actual API/options modules; text service and native UI descriptor mocked; no native hook or in-game rendering"
+  },
+  "skipped_tests": 0
 }

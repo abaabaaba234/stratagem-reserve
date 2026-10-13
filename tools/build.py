@@ -8,7 +8,7 @@ import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 RESOURCE = "mods/stratagem_reserve/core"
 
 
@@ -53,8 +53,8 @@ def manifest():
         "Version": 1,
         "Guid": "e9bc7209-4ac6-4c86-a211-1cf1e44e45c4",
         "Name": "战备次数储存 / Stratagem Reserve v" + VERSION,
-        "Description": "支持红战备轨道系列（排除飞鹰）、绿战备防御设施及 7 种蓝战备一次性装备。三组独立开关、次数上限和储备补充冷却增长倍率；进度可按比例或时间继承。轨道激光保留每局 3 次限制。需 Bingus Shared Loader v18 与 ModOptionsMenu API 1 / version 2+。仅支持 build 25480438；新增功能与联机效果待实机验证。",
-        "Options": [{"Name": "战备次数储存", "Description": "默认三组启用、各组上限 3 次、增长倍率 1.0X、按时间继承、短冷却 5 秒。只影响本机玩家；原生部署时间保留。", "Include": ["Core"]}],
+        "Description": "中文：支持轨道、绿战备及 7 种蓝战备。三组独立开关、上限和补充倍率；轨道激光每局 3 次。菜单默认中文，可切英语，说明始终双语。English: Stores charges for orbitals, defenses and 7 expendables, with independent group settings. Orbital Laser keeps its 3-use mission limit. Chinese/English menu; bilingual descriptions. Requires Bingus Shared Loader v18; MODS UI requires separate ModOptionsMenu API 1 / version 2+. Build 25480438 only. Offline verified; v0.3.2 in-game and multiplayer testing pending.",
+        "Options": [{"Name": "战备次数储存 / Stratagem Reserve", "Description": "中文：默认三组开启、上限 3、倍率 1.0X、时间继承、短冷却 5 秒。仅本机玩家；保留部署时间。English: Defaults: all groups enabled, caps 3, growth 1.0X, elapsed-seconds inheritance, short cooldown 5s. Local player only; native deployment preserved.", "Include": ["Core"]}],
     }
 
 
