@@ -4,10 +4,10 @@ local TICKS=1000000
 local function finite(n) return type(n)=='number' and n==n and n~=math.huge and n~=-math.huge end
 local function same(a,b)
     return a.manager==b.manager and a.entry==b.entry and a.owner==b.owner
-        and a.slot==b.slot and a.type_id==b.type_id and a.clock==b.clock
+        and a.slot==b.slot and a.type_id==b.type_id and a.clock==b.clock and a.definition==b.definition
 end
 function M.new(adapter,config,note)
-    local self={slots={},stopped=false,cleanup_pending=0}
+    local self={slots={},blocked={},stopped=false,cleanup_pending=0,time=0,retry_at=0}
     note=note or function()end
     local function edit(s,field,old,value)
         local prior=s.edits[field]
@@ -37,6 +37,7 @@ function M.new(adapter,config,note)
                         or (e.failed and adapter.owned_prefix and adapter.owned_prefix(current,e.old,e.last)) then
                         if current~=e.old and not adapter.cas(s.id,field,current,e.old) then okay=false end
                     else okay=false end
+                elseif current==nil then okay=false
                 elseif current==e.last or current==e.old then
                     if current~=e.old and not adapter.cas(s.id,field,current,e.old) then okay=false end
                 elseif e.failed and adapter.owned_prefix and adapter.owned_prefix(current,e.old,e.last) then
@@ -49,19 +50,45 @@ function M.new(adapter,config,note)
         end
         return okay
     end
-    function self.release(reason,group)
+    local function retire(key,s,force)
+        s.retiring=true
+        if not force and self.time<(s.cleanup_at or 0) then return false end
+        local okay,done=pcall(restore,s)
+        if okay and done then self.slots[key]=nil;return true end
+        s.cleanup_attempts=(s.cleanup_attempts or 0)+1
+        s.cleanup_at=self.time+math.min(30,2^math.min(s.cleanup_attempts-1,5))
+        return false
+    end
+    local function pending_count()
         local pending=0
+        for _,s in pairs(self.slots)do if s.retiring then pending=pending+1 end end
+        self.cleanup_pending=pending
+        return pending
+    end
+    function self.release(reason,group,force)
         for key,s in pairs(self.slots) do
             if not group or s.group==group then
-                if restore(s) then self.slots[key]=nil else pending=pending+1 end
+                retire(key,s,force)
             end
         end
-        self.cleanup_pending=pending
+        local pending=pending_count()
         if reason then note(reason..'; cleanup_pending='..pending) end
         return pending==0
     end
     function self.stop(reason)
-        self.stopped=true;self.reason=tostring(reason);self.release('STOPPED: '..self.reason)
+        self.stopped=true;self.reason=tostring(reason)
+        self.failures=(self.failures or 0)+1
+        self.retry_at=self.time+math.min(30,2^math.min(self.failures-1,5))
+        self.release('SUSPENDED: '..self.reason)
+    end
+    local function block(key,id,reason)
+        local old=self.blocked[key]
+        if not old or old.reason~=tostring(reason) then note(key..': paused; '..tostring(reason)) end
+        local attempts=old and old.attempts or 0
+        attempts=math.min(attempts+1,6)
+        self.blocked[key]={id=id,reason=tostring(reason),attempts=attempts,
+            retry_at=self.time+math.min(30,2^(attempts-1))}
+        if self.slots[key] then retire(key,self.slots[key]) end
     end
     local function capacity(s)return math.min(config[s.group..'_max_charges'],s.budget or math.huge)end
     local function duration(s)
@@ -169,20 +196,46 @@ function M.new(adapter,config,note)
             remaining=math.max(0,s.cycle-s.progress),cycle=s.cycle}
         if not paused then adapter.hud(x,s.display) end
     end
-    function self.tick()
-        if self.stopped then self.release();return end
+    function self.advance(dt)
+        if finite(dt) and dt>=0 then self.time=self.time+dt end
+    end
+    function self.tick(dt)
+        self.advance(dt)
+        for key,s in pairs(self.slots)do if s.retiring then retire(key,s) end end
+        pending_count()
+        if self.stopped then
+            self.release()
+            if self.time<self.retry_at or self.cleanup_pending>0 then return end
+            self.stopped=false
+        end
         if not config.enabled then self.release();return end
-        local context=adapter.snapshot(config)
-        if not context or context.inactive then self.release();return end
+        local context=adapter.snapshot(config,self.time)
+        if not context or context.inactive then self.release();self.blocked={};self.inactive=true;return end
+        self.inactive=false;self.failures=0
         local seen={}
+        for key,why in pairs(context.blocked or {})do
+            seen[key]=true;block(key,nil,why.reason)
+        end
         for _,x in ipairs(context.targets) do
             if config[x.group..'_enabled'] then
-                seen[x.key]=true;process(x,context.paused)
+                seen[x.key]=true
+                local b=self.blocked[x.key]
+                if b and b.id and not same(b.id,x) then self.blocked[x.key]=nil;b=nil end
+                local s=self.slots[x.key]
+                if not (s and s.retiring) and (not b or self.time>=b.retry_at) then
+                    local okay,why=pcall(process,x,context.paused)
+                    if okay then
+                        if b then note(x.key..': resumed')end
+                        self.blocked[x.key]=nil
+                    else block(x.key,x,why) end
+                end
             end
         end
         for key,s in pairs(self.slots) do
-            if not seen[key] then assert(restore(s),'could not restore removed slot');self.slots[key]=nil end
+            if not seen[key] then retire(key,s) end
         end
+        for key in pairs(self.blocked)do if not seen[key]then self.blocked[key]=nil end end
+        pending_count()
     end
     self.same= same
     return self

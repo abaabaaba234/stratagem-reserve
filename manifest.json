@@ -1,8 +1,8 @@
 {
   "Version": 1,
   "Guid": "e9bc7209-4ac6-4c86-a211-1cf1e44e45c4",
-  "Name": "\u6218\u5907\u6b21\u6570\u50a8\u5b58 / Stratagem Reserve v0.3.2",
-  "Description": "\u4e2d\u6587\uff1a\u652f\u6301\u8f68\u9053\u3001\u7eff\u6218\u5907\u53ca 7 \u79cd\u84dd\u6218\u5907\u3002\u4e09\u7ec4\u72ec\u7acb\u5f00\u5173\u3001\u4e0a\u9650\u548c\u8865\u5145\u500d\u7387\uff1b\u8f68\u9053\u6fc0\u5149\u6bcf\u5c40 3 \u6b21\u3002\u83dc\u5355\u9ed8\u8ba4\u4e2d\u6587\uff0c\u53ef\u5207\u82f1\u8bed\uff0c\u8bf4\u660e\u59cb\u7ec8\u53cc\u8bed\u3002English: Stores charges for orbitals, defenses and 7 expendables, with independent group settings. Orbital Laser keeps its 3-use mission limit. Chinese/English menu; bilingual descriptions. Requires Bingus Shared Loader v18; MODS UI requires separate ModOptionsMenu API 1 / version 2+. Build 25480438 only. Offline verified; v0.3.2 in-game and multiplayer testing pending.",
+  "Name": "\u6218\u5907\u6b21\u6570\u50a8\u5b58 / Stratagem Reserve v0.3.3",
+  "Description": "\u4e2d\u6587\uff1a\u652f\u6301\u8f68\u9053\u3001\u7eff\u6218\u5907\u53ca 7 \u79cd\u84dd\u6218\u5907\uff0c\u4e09\u7ec4\u72ec\u7acb\u8bbe\u7f6e\u3002\u5355\u6218\u5907\u6545\u969c\u9694\u79bb\u3001\u83dc\u5355\u91cd\u8bd5\u3001\u6e05\u7406\u9000\u907f\uff1b\u4e0d\u6309\u6e38\u620f\u7248\u672c\u53f7\u62d2\u7edd\uff0c\u4ecd\u9a8c\u8bc1\u4ee3\u7801\u548c\u5e03\u5c40\u3002\u8f68\u9053\u6fc0\u5149\u6bcf\u5c40 3 \u6b21\u3002\u9ed8\u8ba4\u4e2d\u6587\uff0c\u53ef\u5207\u82f1\u8bed\uff0c\u8bf4\u660e\u53cc\u8bed\u3002English: Stores orbital/defense/expendable charges with per-target isolation, menu retries and cleanup backoff. Compatibility uses code/layout checks, not a game-version allowlist. Orbital Laser retains 3 mission uses. Requires Bingus Shared Loader v18 (API 1); MODS UI needs separate ModOptionsMenu API 1 / version 2+. Offline verified; v0.3.3 in-game and multiplayer testing pending.",
   "Options": [
     {
       "Name": "\u6218\u5907\u6b21\u6570\u50a8\u5b58 / Stratagem Reserve",

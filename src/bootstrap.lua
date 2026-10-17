@@ -1,17 +1,25 @@
-local existing=rawget(_G,'StratagemReserve')
-if existing then return existing end
-local S={version='0.3.2',phase='initializing',ingame_tested=false,multiplayer_tested=false}
-rawset(_G,'StratagemReserve',S)
+local S={version='0.3.3',phase='initializing',ingame_tested=false,multiplayer_tested=false}
 local loader=rawget(_G,'CowboyBingusModLoader')
-if type(loader)~='table' or loader.api~=1 or type(loader.open_log)~='function' or type(loader.jit)~='table' then
+if type(loader)~='table' or loader.api~=1 or type(loader.open_log)~='function' then
     S.phase='stopped';S.reason='Bingus Shared Loader v18 / API 1 required'
     pcall(print,'[StratagemReserve] '..S.reason);return S
 end
 local logfile
 pcall(function() logfile=loader.open_log('StratagemReserve.log') end)
+local elapsed,last_flush=0,0
+local log_times={}
 local function note(line)
-    S.status=tostring(line);pcall(print,'[StratagemReserve] '..S.status)
-    if logfile then pcall(function()logfile:write(os.date('%H:%M:%S ')..S.status..'\n');logfile:flush()end)end
+    S.status=tostring(line)
+    local key=S.status
+    if log_times[key] and elapsed-log_times[key]<30 then return end
+    -- Keep diagnostics bounded even if many distinct external errors occur.
+    local count=0;for k,t in pairs(log_times)do
+        if elapsed-t>=30 then log_times[k]=nil else count=count+1 end
+    end
+    if count>=64 then return end
+    log_times[key]=elapsed
+    pcall(print,'[StratagemReserve] '..S.status)
+    if logfile then pcall(function()logfile:write(os.date('%H:%M:%S ')..S.status..'\n')end)end
 end
 local native=Native.new(Targets,note);S.native=native
 local groups={'red','green','blue'}
@@ -50,33 +58,40 @@ do
     local f=io.open(path,'rb')
     if f then
         local text=f:read('*a');f:close()
-        local candidate=defaults();local okay=true;local legacy;local explicit={}
+        local candidate=defaults();local legacy;local explicit={};local invalid={}
         for line in (text or ''):gmatch('[^\r\n]+')do
             local key,value=line:gsub('^\239\187\191',''):match('^%s*([%w_]+)%s*=%s*(.-)%s*$')
             if key=='max_charges' then
-                legacy=tonumber(value);if not number(legacy,1,10,1)then okay=false end
+                legacy=tonumber(value);if not number(legacy,1,10,1)then legacy=nil;invalid[#invalid+1]=key end
             elseif key=='language' then
                 if value=='zh' or value=='en' then candidate.language=value
                 else note('Invalid language; using Chinese default')end
             elseif type(candidate[key])=='boolean' then
-                if value~='0' and value~='1'then okay=false else candidate[key]=value=='1'end
-            elseif type(candidate[key])=='number' then candidate[key]=tonumber(value);explicit[key]=true end
+                if value~='0' and value~='1'then invalid[#invalid+1]=key else candidate[key]=value=='1'end
+            elseif type(candidate[key])=='number' then
+                local old=candidate[key];candidate[key]=tonumber(value)
+                if not validate(candidate)then candidate[key]=old;invalid[#invalid+1]=key else explicit[key]=true end
+            end
         end
         if legacy then
             for _,group in ipairs{'green','blue'}do
                 local key=group..'_max_charges';if not explicit[key]then candidate[key]=legacy end
             end
         end
-        if okay and validate(candidate)then config=candidate;S.config=config
-        else config.enabled=false;note('Invalid configuration; feature disabled; repair using MODS')end
+        config=candidate;S.config=config
+        if #invalid>0 then
+            S.config_warning=table.concat(invalid,', ')
+            note('Invalid configuration fields use defaults (file preserved): '..S.config_warning)
+        end
     else
         local okay,why=native.save(path,config_text(config));if not okay then note('Config creation failed: '..tostring(why))end
     end
 end
 local model=Model.new(native,config,note);S.model=model
-local menu,menu_blocked
+local menu,menu_provider
+local registered,bound={},{}
+local menu_retry_at,menu_failures=0,0
 local function change(key,value)
-    if model.stopped and key~='language' then return false,model.reason end
     if config[key]==nil then return false,'unknown option'end
     local candidate={};for name,current in pairs(config)do candidate[name]=current end
     candidate[key]=value
@@ -136,23 +151,33 @@ for _,group in ipairs(groups)do
 end
 local function checked(ok,why)assert(ok==true,tostring(why or 'menu API failed'))end
 local function menu_step()
-    if menu_blocked then return end
+    if menu and rawget(_G,'ModOptionsMenu')~=menu then
+        menu=nil;menu_retry_at=0
+    end
+    if elapsed<menu_retry_at then return end
     local okay,why=pcall(function()
         if not menu then
             local api=rawget(_G,'ModOptionsMenu');if not api then return end
+            if api~=menu_provider then
+                menu_provider=api;registered={};bound={};S.menu_registered=false
+            end
             assert(api.api==1 and (tonumber(api.version)or 0)>=2,'ModOptionsMenu API 1 / version 2 required')
             for _,method in ipairs{'register_option','on_change','get','set'}do assert(type(api[method])=='function','missing menu '..method)end
             for _,row in ipairs(specs)do
                 local key,spec=row[1],row[2];spec.mod=title
-                if api.version>=3 then spec.mod_id='stratagem_reserve'end
-                checked(api.register_option('stratagem_reserve_'..key,spec))
-                checked(api.on_change('stratagem_reserve_'..key,function(value)
+                if tonumber(api.version)>=3 then spec.mod_id='stratagem_reserve'else spec.mod_id=nil end
+                if not registered[key]then
+                    checked(api.register_option('stratagem_reserve_'..key,spec));registered[key]=true
+                end
+                if not bound[key]then
+                    checked(api.on_change('stratagem_reserve_'..key,function(value)
                     if key=='language' then
                         if value~=1 and value~=2 then return false,'invalid language choice'end
                         return change(key,value==2 and 'en' or 'zh')
                     end
                     return change(key,value)
-                end))
+                    end));bound[key]=true
+                end
             end
             menu=api;S.menu_registered=true;note('MODS menu registered')
         end
@@ -163,32 +188,45 @@ local function menu_step()
             if menu.get(id)~=wanted then checked(menu.set(id,wanted))end
         end
     end)
-    if not okay then menu_blocked=true;S.menu_error=tostring(why);note('Menu unavailable: '..S.menu_error)end
+    if not okay then
+        menu=nil;S.menu_registered=false;menu_failures=math.min(menu_failures+1,6)
+        menu_retry_at=elapsed+math.min(30,2^(menu_failures-1))
+        S.menu_error=tostring(why);note('Menu unavailable; retrying: '..S.menu_error)
+    else S.menu_error=nil;menu_failures=0 end
 end
 local previous_update=rawget(_G,'update');local previous_shutdown=rawget(_G,'shutdown')
 if type(previous_update)~='function'then model.stop('game update unavailable');S.phase='stopped';return S end
-local pending=false;local recovering=false;local frames=120
+local pending=false;local recovering=false;local frames=120;local frame_dt=0
 local function after(...)
     if not recovering then
         local okay,why=pcall(model.tick)
         if not okay then model.stop(why)end
     end
     pending=false;recovering=false
-    S.phase=model.stopped and 'stopped' or (config.enabled and 'active' or 'disabled')
+    S.phase=not config.enabled and 'disabled' or (model.stopped and 'suspended'
+        or (next(model.blocked) and 'partial' or (model.inactive and 'waiting' or 'active')))
+    if logfile and elapsed-last_flush>=5 then pcall(function()logfile:flush()end);last_flush=elapsed end
     return ...
 end
 rawset(_G,'update',function(...)
+    local dt=select(1,...)
+    frame_dt=type(dt)=='number' and dt==dt and dt>=0 and dt<3600 and dt or 1/60
+    elapsed=elapsed+frame_dt
+    model.advance(frame_dt)
     if pending then
-        recovering=true;model.release('Previous update failed; restoring before retry')
-        note('Previous game/mod update error was propagated')
+        recovering=true
+        if not S.previous_update_failed then
+            model.release('Previous update failed; restoring before retry');S.previous_update_failed=true
+        else model.release()end
     end
     frames=frames+1;if frames>=120 then frames=0;menu_step()end
     pending=true
+    if not recovering then S.previous_update_failed=false end
     -- The original update stays outside pcall: arguments, returns and errors pass through.
     return after(previous_update(...))
 end)
 rawset(_G,'shutdown',function(...)
-    model.release('Shutdown')
+    model.release('Shutdown',nil,true)
     if logfile then pcall(function()logfile:close()end);logfile=nil end
     if type(previous_shutdown)=='function'then return previous_shutdown(...)end
 end)
@@ -196,5 +234,6 @@ if type(jit)=='table' and type(jit.off)=='function'then
     for _,module in ipairs{native,model}do for _,fn in pairs(module)do if type(fn)=='function'then pcall(jit.off,fn,true)end end end
     pcall(jit.off,after,true)
 end
-S.phase='waiting';note('Stratagem Reserve 0.3.2 loaded; orbital/green/blue groups; awaiting mission')
+rawset(_G,'StratagemReserve',S)
+S.phase='waiting';note('Stratagem Reserve 0.3.3 loaded; enabled='..tostring(config.enabled)..'; awaiting mission')
 return S

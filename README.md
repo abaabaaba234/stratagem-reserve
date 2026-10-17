@@ -2,15 +2,17 @@
 
 为《HELLDIVERS 2》的轨道战备、防御设施和一次性装备增加可积累的呼叫次数。战备就绪后继续补充储备，有剩余次数时可在短冷却结束后再次呼叫，参数可在游戏内 **MODS** 菜单调整。
 
-[下载 v0.3.2 安装包](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.2) · [全部 Releases](https://github.com/abaabaaba234/stratagem-reserve/releases)
+[下载 v0.3.3 安装包](https://github.com/abaabaaba234/stratagem-reserve/releases/download/v0.3.3/StratagemReserve_v0.3.3.zip) · [更新日志](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.3) · [历史 Releases](https://github.com/abaabaaba234/stratagem-reserve/releases)
 
-v0.3.2 新增默认中文的 `Language` 选择，可切换本模组的标题与标签；所有菜单介绍在两种语言下始终同时显示中文和英文。储备、伤害、升级、冷却和原生额度规则沿用 v0.3.1。
+v0.3.3 修复单战备异常导致全部功能永久停止、菜单注册失败不重试、初始化过早锁死，以及异常日志和清理逐帧重试。游戏版本号不再作为拒绝条件；原生代码、布局和对象身份仍须通过检查，基础冷却允许在合理范围内变化。三组储备规则、双语菜单和原生额度保持原有行为。
+
+2026-10-17，作者确认两个更新均已测试，自己使用暂未发现问题。由于玩家反馈没有具体报错或同局日志，本次只是针对可能原因进行的尝试性修复，不保证完全解决所有人的舰桥卡顿、不加载或偶发失效。已上传 A 网的同一安装包用于本次 GitHub Release；未重新打包。
 
 ## 前置与支持版本
 
 - **Bingus Shared Loader v18 / API 1**。
 - **ModOptionsMenu API 1，version 2 或更新版本**，用于游戏内设置。
-- Steam build **25480438** / 游戏 EXE **1.8.46015.0**。游戏更新后需要重新核对数据与代码特征。
+- 参考布局来自 Steam build **25480438** / EXE **1.8.46015.0**。运行时不限定 Steam build、PE 时间戳或固定映像大小；须通过 PE 格式、映像边界、12 处原生代码锚点、记录结构与目标身份检查。RVA 或布局变化仍会安全暂停，不代表已支持任意未来版本。
 
 前置需另外安装并启用。安装包只包含本模组及验证报告。
 
@@ -69,7 +71,7 @@ v0.3.2 新增默认中文的 `Language` 选择，可切换本模组的标题与�
 
 ## 安装与升级
 
-1. 关闭游戏，从 Release 下载 `StratagemReserve_v0.3.2.zip`。
+1. 关闭游戏，使用本地 `dist/StratagemReserve_v0.3.3.zip`。
 2. 将 ZIP 导入 Arsenal 或 HD2MM，安装并启用上述前置和本模组。升级时替换旧模组条目。
 3. 按前置说明调整加载顺序。Arsenal 默认优先级下，Bingus Shared Loader 应位于列表底部；启用首项优先时则放在顶部。
 4. 执行 **Purge → Deploy**，重新启动游戏。不要同时使用两个管理器部署。
@@ -82,11 +84,20 @@ v0.3.2 新增默认中文的 `Language` 选择，可切换本模组的标题与�
 %LOCALAPPDATA%\CowboyBingus\Helldivers2\Logs\StratagemReserve.log
 ```
 
-如果没有生效，先检查日志中的版本、目标附加记录与停止原因。版本、战备定义或代码特征不匹配时，模组会停止处理；其他模组修改同一冷却或次数字段也可能触发保护。
+如果没有生效，先查看日志里的 `enabled`、`paused`、`SUSPENDED` 和 `cleanup_pending`：
+
+- `waiting` 表示等待 Loader／有效任务上下文；`disabled` 表示配置总开关关闭；`partial` 表示部分战备暂停；`suspended` 表示公共原生访问暂不可用。
+- 单个战备身份、次数或写入异常只隔离该战备；恢复前核对所有权，不覆盖其他写入者。瞬时异常按 1–30 秒退避重试，定义失败至少间隔 5 秒复查。旧记录未恢复前，不重新接管同一战备。离场后重新发现对象。
+- 同类型重复槽位全部跳过，其他战备继续；不选择任意一个，也不共享储备。重复消失后自动重新验证。
+- 菜单失败按退避重试，保留已完成的控件与回调注册，避免重复绑定；正常每 120 帧同步一次。
+- 配置只修复不合法字段的内存值，合法设置和明确的 `enabled=0` 保留。读取时保留原文件，下一次成功应用设置时保存；日志记录修复字段。
+- 待清理字段退避重试，最长间隔 30 秒；记录保留至恢复成功或身份退休。重复日志 30 秒内去重，去重表最多 64 项，文件正常每 5 秒刷新并在退出时关闭。
+
+加载器 API 尚未就绪时，通过现有 update 低频等待；update 不存在时不设置成功标记，允许之后重新执行 addon。保留原 update 的全部参数、尾部 nil 返回值及异常。如果后加载的其他 MOD 直接覆盖 update 并丢弃原调用链，本 MOD 无法自行获得执行机会；需调整该 MOD 或部署顺序。这一外部问题仍需玩家同局日志和实机排查。
 
 ## 验证范围
 
-v0.3.2 的 **86 项离线测试通过**，在原有 78 项测试的基础上增加菜单语言、双语介绍、旧配置迁移与真实菜单 API 注册/应用/刷新检查。具体范围见 [离线报告](validation/offline.json)。原生适配与目标定义保留，参考记录含 38 个目标定义和 12 处原生代码特征。
+v0.3.3 的 **106 项离线测试通过，无跳过**，覆盖原有玩法、身份／版本元数据边界、单战备隔离与恢复、重复槽位、菜单分步重试、配置字段修复、连续异常日志和清理退避。实际菜单提供者的 API/options 模块已隔离执行，文本服务与原生 UI 仍为模拟。详见 [离线报告](validation/offline.json)。参考记录含 38 个目标定义和 12 处原生代码特征。
 
 EAT-17 的次数积累、消耗、短冷却与完整冷却已有实机日志；次数显示和 v0.3.1 菜单文字已收到用户正常显示的反馈。尚未完成全部战备、增长倍率与联机场景的全面实机验证。
 
@@ -99,11 +110,13 @@ EAT-17 的次数积累、消耗、短冷却与完整冷却已有实机日志；�
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe tools\verify_reference.py --code <历史代码捕获> --stratagems <参考JSON>
+# 可选：设置 HD2_MOD_OPTIONS_MENU_SOURCE 为实际菜单 Lua，启用真实提供者隔离检查
 .\.venv\Scripts\python.exe tests\test_runtime.py
 .\.venv\Scripts\python.exe tools\build.py
 ```
 
-输出为 `dist/StratagemReserve_v0.3.2.zip`。构建会运行测试并检查当前源码与验证记录；Release ZIP 包含补丁、管理器清单和两份验证报告。
+输出为 `dist/StratagemReserve_v0.3.3.zip`。构建会运行测试并检查当前源码与验证记录；Release ZIP 包含补丁、管理器清单和两份验证报告。
 
 新增目标需修改 `src/targets.lua` 并核对原生身份与次数语义。更新原生适配器或目标定义后，使用 `tools/verify_reference.py --code <代码捕获路径> --stratagems <参考JSON路径>` 重新生成参考验证记录。仓库中的数据身份与代码特征来自保留的 build 25480438 历史只读捕获；重新验证需要自行提供对应参考文件。
 
@@ -111,17 +124,19 @@ python -m venv .venv
 
 Adds stored calls to supported orbital, defensive and expendable-equipment stratagems in HELLDIVERS 2. A ready stratagem continues accumulating charges; when charges remain after a call, it becomes usable again after a configurable short cooldown. This changes gameplay and the pace of stratagem use.
 
-[Download the v0.3.2 installation ZIP](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.2). GitHub's automatic source archives require a local build and are not installation packages.
+[Download the v0.3.3 installation ZIP](https://github.com/abaabaaba234/stratagem-reserve/releases/download/v0.3.3/StratagemReserve_v0.3.3.zip) · [Release notes](https://github.com/abaabaaba234/stratagem-reserve/releases/tag/v0.3.3). GitHub's automatic source archives require a local build and are not installation packages.
 
-### Changes in v0.3.2
+On 2026-10-17 the author confirmed testing both updates without observing problems in their own environment. Reports lacked specific errors or same-session logs, so these are tentative fixes based on possible causes and are NOT guaranteed to fully resolve every user's ship stutter, loading failure or intermittent behavior. This Release uses the exact ZIP uploaded to AyakaMods, without rebuilding it.
 
-Adds a persistent `Language` choice in the first MODS row, defaulting to Chinese. It changes this mod's title and labels. Every option description shows Chinese and English together in either language. Existing setting IDs, gameplay parameters, damage, upgrades and native-use limits are preserved.
+### Changes in v0.3.3
+
+Adds per-target fault isolation and automatic retries, resumable menu registration, deferred initialization, bounded logging and cleanup backoff. Game-version metadata no longer rejects a compatible layout, and reasonable base-cooldown changes are accepted. Charge rules, bilingual menus and native mission-use limits retain their previous behavior.
 
 ### Requirements
 
 - Bingus Shared Loader v18 / API 1.
 - The in-game MODS menu additionally requires ModOptionsMenu API 1 / version 2 or newer.
-- Steam build **25480438** / game EXE **1.8.46015.0**. Other builds have not been verified; game updates require checking the native data and code signatures again.
+- Reference layout: Steam build **25480438** / EXE **1.8.46015.0**. Runtime acceptance uses PE format, image bounds, 12 code anchors, record structure and target identity, without a Steam-build, timestamp or exact-image-size allowlist. Changed RVAs/layouts still suspend safely; arbitrary future versions are not verified.
 
 Install the loader and menu separately. This ZIP contains this mod and its validation reports.
 
@@ -173,7 +188,7 @@ Lowering a cap trims excess charges; increasing it grants no free charges. A cha
 
 ### Installation and troubleshooting
 
-1. Close the game and import `StratagemReserve_v0.3.2.zip` into Arsenal or HD2MM, replacing the old entry. Use one manager.
+1. Close the game and import `StratagemReserve_v0.3.3.zip` into Arsenal or HD2MM, replacing the old entry. Use one manager.
 2. Install and enable the loader, menu and this mod.
 3. Follow loader priority guidance: put Bingus Shared Loader at the bottom with Arsenal's default priority, or at the top with first-mod priority enabled.
 4. Run **Purge → Deploy**, restart the game, then open **Esc → MODS → Stratagem Reserve**.
@@ -186,12 +201,18 @@ Settings and logs:
 %LOCALAPPDATA%\CowboyBingus\Helldivers2\Logs\StratagemReserve.log
 ```
 
-Unsupported versions, mismatched stratagem definitions or unexpected code signatures stop processing and log the reason. Mods that alter the same charge or cooldown fields may also trigger ownership protections.
+Check `enabled`, `paused`, `SUSPENDED` and `cleanup_pending` in the log. Status is `waiting` for dependencies/mission context, `disabled` for an explicit master-off setting, `partial` for isolated target faults, or `suspended` for a shared native-access failure.
+
+A target failure pauses only that target, restores owned changes and retries with 1–30 second backoff; invalid definitions are rechecked no faster than every 5 seconds. All duplicate slots of a type are skipped until unambiguous. Pending restoration prevents reattachment to the same target; other targets continue. External values are never blindly restored over.
+
+Menu retries retain completed registrations and callbacks; normal synchronization runs every 120 frames. Invalid configuration fields use defaults individually while valid settings, including `enabled=0`, remain intact. Loading preserves the original file; the next successful settings apply saves it. Repeated logs are deduplicated for 30 seconds with at most 64 entries, normal file flushes occur every 5 seconds, and unresolved cleanup retries at intervals up to 30 seconds without discarding ownership records.
+
+Late Loader availability is retried through the existing update. Missing update leaves no success marker, allowing a later addon retry. Original callback arguments, trailing nil results and errors are preserved. Another MOD that overwrites global update without chaining it still prevents this mod from running; fix that MOD or deployment order and collect same-session logs for diagnosis.
 
 ### Validation limits
 
-All **86 offline checks pass** for v0.3.2, retaining the original 78 checks and adding language, bilingual-description, configuration-migration and actual menu-API checks. See [validation/offline.json](validation/offline.json) for coverage. Native adapter and target sources are unchanged; reference evidence covers 38 definitions and 12 code signatures.
+All **106 offline checks pass with no skips** for v0.3.3, covering existing gameplay, compatibility metadata, isolation/recovery, duplicates, partial menu registration, configuration repair, persistent callback errors and cleanup backoff. Actual API/options modules from the deployed menu provider were executed with mocked text/native UI services. See [validation/offline.json](validation/offline.json). Reference evidence covers 38 definitions and 12 code signatures.
 
-Earlier EAT-17 charge accumulation, consumption and cooldown behavior had gameplay logs; users also confirmed v0.3.1 HUD/menu text. This release's new native UI rendering and gameplay have not been tested in-game. Full target coverage, growth settings, multiplayer and anti-cheat compatibility remain unverified. Offline checks use simulated memory/calls and do not establish those behaviors. The mod processes the local player's stratagem records.
+Earlier EAT-17 charge accumulation, consumption and cooldown behavior had gameplay logs; users also confirmed v0.3.1 HUD/menu text. The author reports successful local gameplay testing of v0.3.3 on 2026-10-17. Ship-frame performance was not measured. Full target coverage, growth settings, multiplayer and anti-cheat compatibility remain unverified. Offline checks use simulated memory/calls; their recorded flags describe that offline run, separately from the later user report. The mod processes the local player's stratagem records.
 
-Build with Python 3.10+ and [requirements-dev.txt](requirements-dev.txt): run `python tests/test_runtime.py`, then `python tools/build.py`. The build validates source/report hashes and produces `dist/StratagemReserve_v0.3.2.zip` with a loader-discoverable Lua patch, manager manifest and two validation reports. Native-reference regeneration requires supplying the corresponding historical build-25480438 capture and stratagem JSON to `tools/verify_reference.py`.
+Build with Python 3.10+ and [requirements-dev.txt](requirements-dev.txt): run `python tests/test_runtime.py`, then `python tools/build.py`. The build validates source/report hashes and produces `dist/StratagemReserve_v0.3.3.zip` with a loader-discoverable Lua patch, manager manifest and two validation reports. Native-reference regeneration requires supplying the corresponding historical build-25480438 capture and stratagem JSON to `tools/verify_reference.py`.

@@ -5,7 +5,7 @@
   "code_capture_sha256": "373fd67e02bbf277494bfa8357acbcbc5a7e2a309b5f0b20578c7b383996658b",
   "code_capture_origin": "eagle-carpet-bomb/research/current/code.bin; historical read-only capture, not new gameplay proof",
   "stratagem_reference_sha256": "79f08fb1685870db3fb13bb6a0c88871d82ebc0336844119588bcbde6f698aae",
-  "native_source_sha256": "0de7c89874ccb977712c222aee7089c596211ec5697b5c88545941fe16a98dc3",
+  "native_source_sha256": "498d2182e74dfb8bd5325ae8aa332bd3cce0e5094221c486962305829e50d0ff",
   "target_source_sha256": "dc7ba75bae8979717139d14b00373fa6d1a0d2ba32faea51430b11900a29df0d",
   "anchors": [
     {

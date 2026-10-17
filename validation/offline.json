@@ -1,9 +1,10 @@
 {
   "status": "OFFLINE_PASSED",
-  "test_cases": 86,
-  "source_sha256": "ce45f2d9e606fabcdacd10253b65830b049826ff9c7a25824ac80d6686cd3c0e",
+  "test_cases": 106,
+  "source_sha256": "b66b8c80d38a906ea626e7515b4c73fa5d114de2ea3d8f8522190d29e454aa9f",
   "engine": "LuaJIT 2.1 via lupa 2.8",
-  "supported_steam_build": 25480438,
+  "reference_steam_build": 25480438,
+  "compatibility_policy": "version-independent PE/layout/anchors and per-target identity checks",
   "ingame_tested": false,
   "multiplayer_tested": false,
   "native_memory": "simulated",

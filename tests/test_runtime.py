@@ -11,6 +11,8 @@ import re
 import struct
 import sys
 import tempfile
+import shutil
+import uuid
 import unittest
 from lupa import luajit21
 
@@ -31,6 +33,7 @@ class Memory:
     def __init__(self):
         self.pages = {}
         self.writes = []
+        self.reads = 0
         self.denied = False
         self.fail_next = False
         self.partial = False
@@ -40,6 +43,7 @@ class Memory:
             self.pages.setdefault((p + i) >> 12, bytearray(4096))[(p + i) & 4095] = v
 
     def read(self, p, n):
+        self.reads += 1
         try:
             return bytes(self.pages[(p + i) >> 12][(p + i) & 4095] for i in range(n))
         except KeyError:
@@ -62,8 +66,11 @@ class Memory:
 
 class Game:
     def __init__(self, cfg=None, loader=True, menu=True, bad_build=False, cached=None):
-        self.temp = tempfile.TemporaryDirectory()
-        self.folder = Path(self.temp.name)
+        # Python 3.14 tempfile mode 0700 can create inaccessible sandbox ACLs.
+        # Use a uniquely named, normally inherited directory within this repository.
+        self.folder = ROOT / '.test-runs' / uuid.uuid4().hex
+        self.folder.mkdir(parents=True, mode=0o777)
+        self.temp = None
         self.cfg = self.folder / "StratagemReserve.cfg"
         if cfg:
             self.cfg.write_text(cfg, encoding="utf-8")
@@ -95,6 +102,7 @@ class Game:
         dos[:2] = b"MZ"
         struct.pack_into("<I", dos, 60, 0x100)
         dos[0x100:0x104] = b"PE\0\0"
+        dos[0x104:0x106] = b"\x64\x86"
         dos[0x118:0x11a] = b"\x0b\x02"
         struct.pack_into("<I", dos, 0x108, 0 if bad_build else 0x6ab3b43f)
         struct.pack_into("<I", dos, 0x150, 0x4744000)
@@ -314,7 +322,8 @@ class Game:
         if self.lua:
             self.lua.globals()[b"shutdown"](b"closed")
         self.lua = None
-        self.temp.cleanup()
+        assert self.folder.resolve().is_relative_to((ROOT / '.test-runs').resolve())
+        shutil.rmtree(self.folder)
 
 
 class RuntimeTests(unittest.TestCase):
@@ -409,55 +418,70 @@ class RuntimeTests(unittest.TestCase):
         g.mem.put(g.slot, U(146)); g.tick(); self.assertEqual(len(g.mem.writes), writes)
         self.assertIsNone(g.display())
 
-    def test_bad_build_fails_before_any_write(self):
-        g = self.game(bad_build=True); g.tick(); self.assertEqual(g.state[b"phase"], b"stopped")
-        self.assertEqual(g.mem.writes, [])
+    def test_changed_pe_timestamp_accepts_verified_layout(self):
+        g = self.game(bad_build=True); g.tick()
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
 
     def test_bad_code_anchor_fails_before_any_write(self):
         g = self.game(); g.mem.put(BASE + 0x135c6f5, b"\x90"); g.tick()
-        self.assertEqual(g.state[b"phase"], b"stopped"); self.assertEqual(g.mem.writes, [])
+        self.assertEqual(g.state[b"phase"], b"suspended"); self.assertEqual(g.mem.writes, [])
 
     def test_target_payload_guard(self):
         g = self.game(); g.mem.put(0x68000000, bytes(16)); g.tick()
-        self.assertEqual(g.mem.writes, []); self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(g.mem.writes, []); self.assertEqual(g.state[b"phase"], b"partial")
 
-    def test_static_target_modified_fails_closed(self):
-        g = self.game(); g.mem.put(g.definition + 0x68, F(5)); g.tick()
-        self.assertEqual(g.mem.writes, []); self.assertEqual(g.state[b"phase"], b"stopped")
+    def test_modified_base_cooldown_uses_live_effective_value(self):
+        g = self.game(); g.mem.put(g.definition + 0x68, F(5)); g.cooldown = 5; g.tick()
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.display()[b'cycle'], 5)
+
+    def test_changed_image_size_with_valid_bounds_accepts_verified_layout(self):
+        g = self.game(); g.mem.put(BASE + 0x150, U(0x5000000)); g.tick()
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
+
+    def test_wrong_pe_architecture_and_too_small_image_reject_before_writing(self):
+        for at, value in [(BASE + 0x104, b'\x4c\x01'), (BASE + 0x150, U(0x1000000))]:
+            g = self.game(); g.mem.put(at, value); g.tick()
+            self.assertEqual(g.state[b'phase'], b'suspended'); self.assertEqual(g.mem.writes, [])
+
+    def test_invalid_effective_cooldown_only_pauses_affected_target(self):
+        g = self.game(); g.add_target(121); g.cooldown = float('nan'); g.tick()
+        self.assertEqual(g.field(4), 0xffffffff); self.assertEqual(g.field(4, slot=1), 1)
+        g.cooldown = 70; g.tick(1)
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
 
     def test_existing_finite_uses_conflict(self):
         g = self.game(); g.mem.put(g.slot + 4, U(4)); g.tick()
-        self.assertEqual(g.mem.writes, []); self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(g.mem.writes, []); self.assertEqual(g.state[b"phase"], b"partial")
 
     def test_unexpected_external_count_is_not_overwritten(self):
         g = self.game(); g.tick(); writes = len(g.mem.writes)
         g.mem.put(g.slot + 4, U(8)); g.tick(); self.assertEqual(g.field(4), 8)
-        self.assertEqual(len(g.mem.writes), writes); self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(len(g.mem.writes), writes); self.assertEqual(g.state[b"phase"], b"partial")
 
     def test_count_decrement_without_success_is_rejected(self):
         g = self.game(); g.tick(); g.mem.put(g.slot + 4, U(0)); g.tick()
-        self.assertEqual(g.state[b"phase"], b"stopped"); self.assertEqual(g.field(4), 0xffffffff)
+        self.assertEqual(g.state[b"phase"], b"partial"); self.assertEqual(g.field(4), 0xffffffff)
 
     def test_deadline_conflict_is_not_overwritten(self):
         g = self.game(); g.tick(); g.tick(70); g.call()
         g.mem.put(g.slot + 0x18, Q(g.now + 99_000_000)); g.tick()
         self.assertEqual(g.field(0x18, "Q"), g.now + 99_000_000)
-        self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(g.state[b"phase"], b"partial")
 
     def test_failed_write_stops_and_restores(self):
         g = self.game(); g.tick(); g.mem.fail_next = True; g.tick(70)
-        self.assertEqual(g.state[b"phase"], b"stopped"); self.assertEqual(g.field(4), 0xffffffff)
+        self.assertEqual(g.state[b"phase"], b"partial"); self.assertEqual(g.field(4), 0xffffffff)
 
     def test_partial_initial_count_write_restores(self):
         g = self.game(); g.mem.fail_next = True; g.mem.partial = True; g.tick()
-        self.assertEqual(g.state[b"phase"], b"stopped"); self.assertEqual(g.field(4), 0xffffffff)
+        self.assertEqual(g.state[b"phase"], b"partial"); self.assertEqual(g.field(4), 0xffffffff)
         self.assertEqual(g.state[b"model"][b"cleanup_pending"], 0)
 
     def test_partial_short_deadline_write_restores(self):
         g = self.game(); g.tick(); g.tick(70); g.mem.fail_next = True; g.mem.partial = True; g.call()
         self.assertEqual(g.field(0x18, "Q"), g.field(0x20, "Q") + 70_000_000)
         self.assertEqual(g.field(4), 0xffffffff)
-        self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(g.state[b"phase"], b"partial")
 
     def test_disable_after_two_native_decrements_restores(self):
         g = self.game(); g.tick(); g.tick(140); g.call(); g.tick(8); g.call()
@@ -471,7 +495,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_mission_clock_rollback_retires_state(self):
         g = self.game(); g.tick(); g.tick(70); g.now = 1_000_000; g.tick()
-        self.assertEqual(g.state[b"phase"], b"stopped"); self.assertEqual(g.field(4), 0xffffffff)
+        self.assertEqual(g.state[b"phase"], b"partial"); self.assertEqual(g.field(4), 0xffffffff)
 
     def test_late_menu_is_registered_without_resetting_progress(self):
         g = self.game(menu=False); g.tick(); g.tick(20)
@@ -482,11 +506,11 @@ class RuntimeTests(unittest.TestCase):
 
     def test_execute_pages_are_never_written(self):
         g = self.game(); g.mem.denied = True; g.tick(); self.assertEqual(g.mem.writes, [])
-        self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(g.state[b"phase"], b"partial")
 
-    def test_missing_loader_has_no_update_hook(self):
+    def test_missing_loader_waits_without_native_writes(self):
         g = self.game(loader=False); g.tick(); self.assertEqual(g.mem.writes, [])
-        self.assertEqual(g.state[b"phase"], b"stopped")
+        self.assertEqual(g.lua.globals()[b"StratagemReserve"][b"phase"], b"waiting")
 
     def test_no_menu_core_still_runs(self):
         g = self.game(menu=False); g.tick(); g.tick(70); self.assertEqual(g.field(4), 2)
@@ -514,12 +538,12 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("short_cooldown=4.5", text)
         h = self.game(cfg=text); h.tick(); self.assertEqual(h.state[b"config"][b"blue_max_charges"], 6)
 
-    def test_invalid_config_disables_feature(self):
+    def test_invalid_config_field_uses_default(self):
         g = self.game(cfg="short_cooldown=nan\n"); g.tick()
-        self.assertEqual(g.state[b"phase"], b"disabled"); self.assertEqual(g.mem.writes, [])
+        self.assertEqual(g.state[b"phase"], b"active"); self.assertEqual(g.field(4), 1)
 
     def test_duplicate_load_does_not_add_hooks(self):
-        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.2")
+        g = self.game(); g.tick(); second = g.lua.execute(SOURCE); self.assertEqual(second[b"version"], b"0.3.3")
         g.tick(); self.assertEqual(g.lua.globals()[b"original_calls"], 2)
 
     def test_original_errors_propagate_and_next_frame_restores(self):
@@ -614,11 +638,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
         self.assertEqual(g.field(4, slot=1), 0xffffffff)
 
-    def test_equipped_target_guard_failure_restores_other_group(self):
+    def test_equipped_target_guard_failure_isolates_affected_group(self):
         g = self.game(); g.add_target(121); g.tick(); g.tick(140)
         g.mem.put(0x70000000 + 121 * 0x1000 + 0x300, bytes(16)); g.tick()
-        self.assertEqual(g.state[b'phase'], b'stopped')
-        for slot in (0, 1): self.assertEqual(g.field(4, slot=slot), 0xffffffff)
+        self.assertEqual(g.state[b'phase'], b'partial')
+        self.assertEqual(g.field(4), 3); self.assertEqual(g.field(4, slot=1), 0xffffffff)
 
     def test_nonexpendable_support_mission_and_reward_slots_are_untouched(self):
         for type_id in (92, 31, 33, 69, 15, 124, 3, 49, 5):
@@ -925,14 +949,14 @@ class RuntimeTests(unittest.TestCase):
                 g.pending_call = True; g.pending_slot = 1; g.frame(0.1)
                 if failure:
                     g.mem.put(0x70000000 + 107 * 0x1000 + 0x300, bytes(8)); g.tick()
-                    self.assertEqual(g.state[b'phase'], b'stopped')
+                    self.assertEqual(g.state[b'phase'], b'partial')
                 else: g.apply('red_enabled', False)
                 self.assertEqual(g.mem.read(address + 4, 4), U(2))
 
     def test_laser_short_deadline_write_failure_does_not_refund_dispatch(self):
         g = self.game(cfg='blue_enabled=0\n'); g.add_target(107); g.tick(); g.tick(300)
         g.mem.fail_next = True; g.mem.partial = True; g.call(slot=1)
-        self.assertEqual(g.state[b'phase'], b'stopped'); self.assertEqual(g.field(4, slot=1), 2)
+        self.assertEqual(g.state[b'phase'], b'partial'); self.assertEqual(g.field(4, slot=1), 2)
         self.assertEqual(g.field(0x18, 'Q', 1) - g.field(0x20, 'Q', 1), 300_000_000)
 
     def test_config_roundtrip_and_legacy_caps_prefer_explicit_group_values(self):
@@ -946,11 +970,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual([config[(c + '_cd_growth').encode()] for c in ('red','green','blue')], [1.7,1.3,2.1])
         self.assertTrue(config[b'inherit_ratio'])
 
-    def test_malformed_new_config_disables_feature(self):
+    def test_malformed_new_config_repairs_only_invalid_fields(self):
         for cfg in ('red_cd_growth=nan\n', 'green_max_charges=0\n', 'blue_cd_growth=1.25\n', 'inherit_ratio=2\n'):
             with self.subTest(cfg=cfg):
-                g = self.game(cfg=cfg); g.tick(); self.assertEqual(g.state[b'phase'], b'disabled')
-                self.assertEqual(g.mem.writes, [])
+                g = self.game(cfg=cfg); g.tick(); self.assertEqual(g.state[b'phase'], b'active')
+                self.assertIsNotNone(g.state[b'config_warning'])
 
     def test_hud_at_cap_restores_original_status_text(self):
         g = self.game(); g.tick(); g.tick(140)
@@ -979,7 +1003,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_native_count_renderer_error_restores_ui_cache(self):
         g = self.game(); g.tick(); g.fail_draw = True; g.call()
-        self.assertEqual(g.state[b'phase'], b'stopped')
+        self.assertEqual(g.state[b'phase'], b'partial')
         self.assertEqual(struct.unpack('<I', g.mem.read(g.card + 0x14bc, 4))[0], 1)
 
     def test_package_contains_only_one_addon(self):
@@ -989,6 +1013,162 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(b[row[2] + 8:row[2] + row[7]], SOURCE)
         self.assertTrue(SOURCE.startswith(b"-- HD2-Addon: mods/stratagem_reserve/core\n"))
 
+    def test_duplicate_type_skips_both_slots_and_keeps_other_type(self):
+        g = self.game(); duplicate = g.add_target(147, 1); g.add_target(121, 2)
+        g.tick(); g.tick(90)
+        self.assertEqual(g.state[b'phase'], b'partial')
+        self.assertEqual(g.field(4), 0xffffffff); self.assertEqual(g.field(4, slot=1), 0xffffffff)
+        self.assertEqual(g.field(4, slot=2), 2)
+        self.assertFalse(any(p in (g.slot + 4, duplicate + 4) for p, _ in g.mem.writes))
+        g.mem.put(duplicate, U(146)); g.tick(31)
+        self.assertEqual(g.field(4), 1); self.assertEqual(g.state[b'phase'], b'active')
+
+    def test_duplicate_appearing_after_attach_restores_original_and_isolates(self):
+        g = self.game(); g.tick(); g.tick(70); g.add_target(147, 1); g.add_target(121, 2)
+        g.mem.put(BASE + 0x37cb600 + 147 * 8, Q(g.definition)); g.tick()
+        self.assertEqual(g.field(4), 0xffffffff); self.assertEqual(g.field(4, slot=1), 0xffffffff)
+        self.assertEqual(g.field(4, slot=2), 1)
+        self.assertIsNone(g.display())
+
+    def test_bad_payload_recovers_without_restarting_or_resetting_other_type(self):
+        g = self.game(); address = g.add_target(121); payload = 0x70000000 + 121 * 0x1000 + 0x300
+        original = g.mem.read(payload, 8); g.mem.put(payload, bytes(8)); g.tick(); g.tick(20)
+        self.assertEqual(g.display()[b'progress'], 20)
+        g.mem.put(payload, original); g.tick(31)
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4, slot=1), 1)
+        self.assertEqual(g.display()[b'progress'], 51)
+
+    def test_temporary_write_failure_recovers_without_restart(self):
+        g = self.game(); g.mem.fail_next = True; g.tick()
+        self.assertEqual(g.state[b'phase'], b'partial'); g.tick(1)
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
+
+    def test_code_guard_failure_retries_and_recovers_after_compatible_code_returns(self):
+        g = self.game(); at = BASE + 0x135c6f5; original = g.mem.read(at, 1)
+        g.mem.put(at, b'\x90'); g.tick(); self.assertEqual(g.state[b'phase'], b'suspended')
+        reads = g.mem.reads
+        for _ in range(100): g.tick(0)
+        self.assertEqual(g.mem.reads - reads, 200)  # simulated engine's two slot reads per frame
+        self.assertEqual(g.mem.writes, [])
+        g.mem.put(at, original); g.tick(1)
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
+
+    def test_cleanup_conflict_has_no_per_frame_memory_retry_and_retains_record(self):
+        g = self.game(); g.tick(); g.mem.put(g.slot + 4, U(8)); g.tick()
+        g.mem.put(g.scene + 0xac21c, U(1)); g.tick()
+        reads = g.mem.reads; writes = len(g.mem.writes)
+        for _ in range(120): g.tick(0)
+        # Only the scene pointer and state are sampled on the bridge.
+        self.assertEqual(g.mem.reads - reads, 480)  # 240 engine + 240 scene reads
+        self.assertEqual(len(g.mem.writes), writes); self.assertEqual(g.field(4), 8)
+        self.assertEqual(g.state[b'model'][b'cleanup_pending'], 1)
+        self.assertTrue(g.display()[b'retiring'])
+        g.mem.put(g.slot + 4, U(1)); g.tick(1)
+        self.assertEqual(g.field(4), 0xffffffff); self.assertIsNone(g.display())
+
+    def test_cleanup_write_failure_retries_after_backoff(self):
+        g = self.game(); g.tick(); g.mem.fail_next = True
+        g.mem.put(g.scene + 0xac21c, U(1)); g.tick()
+        self.assertEqual(g.state[b'model'][b'cleanup_pending'], 1)
+        writes = len(g.mem.writes)
+        for _ in range(60): g.tick(0)
+        self.assertEqual(len(g.mem.writes), writes)
+        g.tick(1); self.assertEqual(g.field(4), 0xffffffff)
+        self.assertEqual(g.state[b'model'][b'cleanup_pending'], 0)
+
+    def test_cleanup_pending_for_one_target_does_not_stop_other_target(self):
+        g = self.game(); g.add_target(121); g.tick(); g.mem.put(g.slot + 4, U(8)); g.tick(); g.tick(90)
+        self.assertEqual(g.field(4), 8); self.assertEqual(g.field(4, slot=1), 2)
+        self.assertEqual(g.state[b'model'][b'cleanup_pending'], 1)
+
+    def test_finite_allowance_guard_failure_does_not_stop_other_type(self):
+        g = self.game(); g.add_target(107); g.tick()
+        g.mem.put(g.slot + 4, U(8)); g.tick(); g.tick(300)
+        self.assertEqual(g.field(4, slot=1), 2)
+        self.assertEqual(g.field(4), 8)
+
+    def test_menu_partial_registration_retries_without_duplicates(self):
+        g = self.game()
+        g.lua.execute(b'''local original=ModOptionsMenu.register_option;local failed=false
+            ModOptionsMenu.register_option=function(id,spec)
+                if not failed and id=='stratagem_reserve_short_cooldown' then failed=true;return false,'temporary' end
+                return original(id,spec)
+            end''')
+        g.tick(); self.assertFalse(g.state[b'menu_registered']); g.tick(2)
+        for _ in range(120): g.tick()
+        self.assertTrue(g.state[b'menu_registered']); self.assertIsNone(g.state[b'menu_error'])
+        self.assertEqual(len(g.lua.globals()[b'menu_state'][b'order']), 13)
+        self.assertEqual(len(g.lua.globals()[b'menu_state'][b'callbacks']), 0)  # keyed table
+        self.assertEqual(len(list(g.lua.globals()[b'menu_state'][b'callbacks'].keys())), 13)
+
+    def test_menu_partial_callback_binding_resumes_without_rebinding_earlier_rows(self):
+        g = self.game()
+        g.lua.execute(b'''local original=ModOptionsMenu.on_change;local failed=false
+            ModOptionsMenu.on_change=function(id,fn)
+                if not failed and id=='stratagem_reserve_inherit_ratio' then failed=true;return false,'temporary' end
+                return original(id,fn)
+            end''')
+        g.tick(); g.tick(2)
+        for _ in range(120): g.tick()
+        self.assertTrue(g.state[b'menu_registered'])
+        self.assertEqual(len(list(g.lua.globals()[b'menu_state'][b'callbacks'].keys())), 13)
+        self.assertTrue(g.apply('blue_max_charges', 5)[0])
+
+    def test_old_menu_upgrade_is_retried(self):
+        g = self.game(); api = g.lua.globals()[b'ModOptionsMenu']; api[b'version'] = 1
+        g.tick(); api[b'version'] = 3; g.tick(2)
+        for _ in range(120): g.tick()
+        self.assertTrue(g.state[b'menu_registered']); self.assertEqual(g.field(4), 1)
+
+    def test_missing_loader_arrives_late_and_initializes_once(self):
+        g = self.game(loader=False); g.tick()
+        g.lua.execute(b'''CowboyBingusModLoader={api=1,log_directory=cfg_folder,
+            open_log=function(name)return io.open(cfg_folder..'\\\\'..name,'wb')end}''')
+        for _ in range(121): g.tick()
+        g.state = g.lua.globals()[b'StratagemReserve']
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
+        self.assertEqual(g.lua.globals()[b'original_calls'], 122)
+        self.assertEqual(g.lua.execute(SOURCE)[b'version'], b'0.3.3')
+
+    def test_missing_update_does_not_poison_future_addon_load(self):
+        g = self.game()
+        g.lua.execute(b'StratagemReserve=nil;update=nil')
+        state = g.lua.execute(SOURCE); self.assertEqual(state[b'phase'], b'waiting')
+        self.assertIsNone(g.lua.globals()[b'StratagemReserve'])
+        g.lua.execute(b'update=function(dt,marker)pyframe(dt);return dt,marker end')
+        g.state = g.lua.execute(SOURCE); g.tick()
+        self.assertEqual(g.state[b'phase'], b'active'); self.assertEqual(g.field(4), 1)
+
+    def test_repeated_original_errors_are_rate_limited_and_preserve_error(self):
+        g = self.game(); g.tick()
+        for _ in range(300):
+            g.native_error = True
+            with self.assertRaisesRegex(RuntimeError, 'original callback error'): g.tick(0.01)
+        g.lua.globals()[b'shutdown'](b'closed')
+        text = (g.folder / 'StratagemReserve.log').read_text()
+        self.assertEqual(text.count('Previous update failed'), 1)
+        self.assertLess(len(text.splitlines()), 15)
+
+    def test_repeated_original_errors_still_advance_cleanup_backoff(self):
+        g = self.game(); g.tick(); g.mem.put(g.slot + 4, U(8))
+        g.native_error = True
+        with self.assertRaises(RuntimeError): g.tick(0.1)
+        g.native_error = True
+        with self.assertRaises(RuntimeError): g.tick(0.1)
+        g.mem.put(g.slot + 4, U(1)); g.native_error = True
+        with self.assertRaises(RuntimeError): g.tick(1)
+        self.assertEqual(g.field(4), 0xffffffff)
+
+    def test_config_repair_preserves_disabled_preference_and_other_valid_fields(self):
+        cfg = 'enabled=0\nblue_max_charges=7\nshort_cooldown=nan\n'
+        g = self.game(cfg=cfg); g.tick()
+        self.assertEqual(g.state[b'phase'], b'disabled'); self.assertEqual(g.mem.writes, [])
+        self.assertEqual(g.state[b'config'][b'blue_max_charges'], 7)
+        self.assertEqual(g.state[b'config'][b'short_cooldown'], 5)
+        self.assertEqual(g.cfg.read_text(), cfg)
+        self.assertTrue(g.apply('enabled', True)[0]); g.tick()
+        self.assertEqual(g.field(4), 1)
+
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(RuntimeTests)
@@ -997,7 +1177,8 @@ if __name__ == "__main__":
         sys.exit(1)
     report = {"status": "OFFLINE_PASSED", "test_cases": result.testsRun,
               "source_sha256": hashlib.sha256(SOURCE).hexdigest(),
-              "engine": "LuaJIT 2.1 via lupa 2.8", "supported_steam_build": 25480438,
+              "engine": "LuaJIT 2.1 via lupa 2.8", "reference_steam_build": 25480438,
+              "compatibility_policy": "version-independent PE/layout/anchors and per-target identity checks",
               "ingame_tested": False, "multiplayer_tested": False,
               "native_memory": "simulated", "native_dispatch": "simulated", "hud_rendering": "not tested",
               "short_cooldown_anchor": "native arrival endpoint; deployment duration preserved",

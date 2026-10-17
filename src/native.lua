@@ -1,4 +1,5 @@
--- Build 25480438 only. No executable patches, static cooldown edits or remote slots.
+-- Layout compatibility is checked independently of game version metadata.
+-- No executable patches, static cooldown edits or remote slots.
 local ffi=require('ffi')
 local M={}
 local kernel={}
@@ -83,15 +84,15 @@ function M.new(targets,note)
         local dos=read(base,64);assert(dos and dos:sub(1,2)=='MZ','invalid game.dll header')
         local offset=u32(dos,60);assert(offset>=64 and offset<=4096-96,'invalid PE offset')
         local pe=read(base+offset,96)
-        assert(pe and pe:sub(1,4)=='PE\0\0' and u32(pe,8)==0x6ab3b43f
-            and u32(pe,80)==0x4744000 and pe:sub(25,26)=='\11\2','unsupported game build')
+        assert(pe and pe:sub(1,4)=='PE\0\0' and pe:sub(5,6)=='\100\134' and pe:sub(25,26)=='\11\2'
+            and u32(pe,80)>0x37cc000,'unsupported game.dll layout')
         for _,a in ipairs(ANCHORS) do
             local expected=unhex(a[2]);assert(read(base+a[1],#expected)==expected,'code identity differs at '..string.format('%x',a[1]))
         end
         effective_cd=ffi.cast('float (*)(uintptr_t, uint64_t, uint32_t, uint8_t, uint8_t)',base+0x8796a0)
         text_set=ffi.cast('uint8_t (*)(uintptr_t, const char *)',base+0x143dd60)
         count_draw=ffi.cast('void (*)(uintptr_t)',base+0x183ae60)
-        checked=true;note('Build 25480438 PE and native code anchors verified')
+        checked=true;note('game.dll layout and native code anchors verified; PE timestamp='..u32(pe,8))
         return base
     end
     local function definition(t)
@@ -106,10 +107,12 @@ function M.new(targets,note)
         local p=u64(raw,0x98);local payload=read(p,#t.payloads*8)
         local expected='';for _,h in ipairs(t.payloads)do expected=expected..unhex(h)end
         assert(payload==expected,'target payload identity differs')
-        -- Static references are identity guards; the cycle comes from the native getter.
+        -- Cooldown is live tuning, not identity. Finite-use semantics remain guarded.
         local f=ffi.new('float[1]');ffi.copy(f,raw:sub(105,108),4)
-        assert(math.abs(tonumber(f[0])-t.baseline_cooldown)<0.01,'target base cooldown modified')
-        return address
+        local cooldown=tonumber(f[0]);local allowance=u32(raw,0x50)
+        assert(cooldown==cooldown and cooldown>=1 and cooldown<=3600,'invalid base cooldown')
+        assert(allowance==0xffffffff or allowance<=1000,'invalid native allowance')
+        return address,allowance
     end
     function api.valid(id)
         if not base or ptr(base+0x347ce50)~=id.manager or ptr(base+0x3326348)~=id.clock then return false end
@@ -140,7 +143,9 @@ function M.new(targets,note)
         for n=0,8 do if c==b:sub(1,n)..a:sub(n+1)then return true end end
         return false
     end
-    function api.snapshot(config)
+    local rejected={}
+    function api.snapshot(config,time)
+        time=time or 0
         if not build() then return {inactive=true} end
         local scene=ptr(base+0x3326340)
         if not scene or uint(scene+0xac21c)~=4 then return {inactive=true} end
@@ -162,28 +167,59 @@ function M.new(targets,note)
         local now=ptr(clock+0x18);assert(now and now<9007199254740991,'invalid mission clock')
         local mission=hud+0x24e340
         local paused=byte(mission+0x59)~=0 or byte(mission+0x21f5b0)~=1
-        local result={paused=paused,targets={}}
+        local result={paused=paused,targets={},blocked={}}
         local upgrades=ptr(base+0x33264f8)
         if not upgrades or upgrades<0x10000 then return {inactive=true} end
-        local found={}
+        local found,slot_lists={},{}
+        for slot=0,rows-1 do
+            local type_id=uint(entry+0x1c0+slot*48)
+            if by_type[type_id] then
+                found[type_id]=(found[type_id] or 0)+1
+                slot_lists[type_id]=(slot_lists[type_id] and slot_lists[type_id]..',' or '')..slot
+            end
+        end
+        local present={}
         -- Check only equipped, enabled targets. An unrelated or disabled definition
         -- must not stop the active group, nor impose reads for the entire registry.
         for slot=0,rows-1 do
             local address=entry+0x1c0+slot*48
             local t=by_type[uint(address)]
             if t and config[t.group..'_enabled'] then
-                local def=definition(t)
+                present[t.key]=true
+                local previous=rejected[t.key]
+                local okay,def,allowance
+                if found[t.type_id]>1 then
+                    okay=false;def='duplicate target slots; type='..t.type_id..'; slots='..slot_lists[t.type_id]
+                elseif previous and time<previous.retry_at then
+                    okay=false;def=previous.reason
+                else
+                    okay,def,allowance=pcall(definition,t)
+                end
+                if not okay then
+                    if not previous or time>=previous.retry_at or previous.reason~=tostring(def) then
+                        rejected[t.key]={reason=tostring(def),retry_at=time+5}
+                    end
+                    result.blocked[t.key]={reason=tostring(def),type_id=t.type_id,slot=slot}
+                    def=nil
+                else rejected[t.key]=nil end
                 if def then
-                    assert(not found[t.type_id],'duplicate target slots');found[t.type_id]=true
+                    local sampled,target=pcall(function()
                     local b=assert(read(address,48),'target slot unavailable')
                     local cycle=tonumber(effective_cd(upgrades,ffi.cast('uint64_t *',owner)[0],t.type_id,0,0))
-                    result.targets[#result.targets+1]={key=t.key,group=t.group,type_id=t.type_id,native_uses=t.native_uses or 0xffffffff,manager=manager,
+                    return {key=t.key,group=t.group,type_id=t.type_id,native_uses=allowance,manager=manager,
                         entry=entry,owner=owner,slot=slot,address=address,definition=def,
                         clock=clock,now=now,uses=u32(b,4),start=u64(b,0x10),
                         deadline=u64(b,0x18),arrival=u64(b,0x20),base_cd=cycle,hud=hud}
+                    end)
+                    if sampled then result.targets[#result.targets+1]=target
+                    else
+                        rejected[t.key]={reason=tostring(target),retry_at=time+5}
+                        result.blocked[t.key]={reason=tostring(target),type_id=t.type_id,slot=slot}
+                    end
                 end
             end
         end
+        for key in pairs(rejected)do if not present[key]then rejected[key]=nil end end
         return result
     end
     local function widget_text(widget)
